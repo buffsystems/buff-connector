@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/buffsystems/buff-connector/releases"><img alt="Выпуск" src="https://img.shields.io/github/v/release/buffsystems/buff-connector?label=выпуск&color=2563eb"></a>
+  <a href="https://github.com/buffsystems/buff-connector/releases"><img alt="Выпуск" src="https://img.shields.io/github/v/release/buffsystems/buff-connector?label=%D0%B2%D1%8B%D0%BF%D1%83%D1%81%D0%BA&color=2563eb"></a>
   <a href="https://github.com/buffsystems/buff-connector/pkgs/container/buff-connector"><img alt="Образ" src="https://img.shields.io/badge/ghcr.io-buff--connector-2563eb?logo=docker&logoColor=white"></a>
   <a href="LICENSE"><img alt="Лицензия" src="https://img.shields.io/badge/лицензия-MIT-64748b"></a>
   <a href="https://buff.systems/docs/connector"><img alt="Документация" src="https://img.shields.io/badge/документация-buff.systems-0b0d12"></a>
@@ -72,9 +72,12 @@
 
 В **Community** ничего ставить не нужно — коннектор встроен в [установку](https://github.com/buffsystems/buff-community). Для Enterprise и SaaS — бинарный файл или образ.
 
-**Бинарный файл** — для Linux, macOS и Windows, в [выпусках](https://github.com/buffsystems/buff-connector/releases) или на [buff.systems/downloads](https://buff.systems/downloads). Проверьте сумму и подпись **до** запуска:
+**Бинарный файл** — для Linux, macOS и Windows, в [выпусках](https://github.com/buffsystems/buff-connector/releases) этого репозитория. Скачайте его с суммами и подписью и проверьте **до** запуска — открытый ключ [`cosign.pub`](cosign.pub) лежит здесь же, в репозитории:
 
 ```sh
+B=https://github.com/buffsystems/buff-connector/releases/latest/download
+curl -fLO $B/connector-linux-amd64 -fLO $B/connector-linux-amd64.sig -fLO $B/SHA256SUMS
+curl -fLO https://raw.githubusercontent.com/buffsystems/buff-connector/main/cosign.pub
 sha256sum -c SHA256SUMS --ignore-missing
 cosign verify-blob --key cosign.pub \
   --signature connector-linux-amd64.sig connector-linux-amd64
@@ -92,7 +95,7 @@ docker run -d --name buff-connector \
   ghcr.io/buffsystems/buff-connector:latest
 ```
 
-Зеркало образа — `registry.buff.systems/buff/connector`. Код сопряжения выдаёт приложение Buff в разделе «Коннекторы»; дальше настройка идёт на локальной странице агента. Подробно — [Установка](https://buff.systems/docs/connector/install) и [Локальная страница](https://buff.systems/docs/connector/web-setup).
+Зеркала — `registry.buff.systems/buff/connector` для образа и [buff.systems/downloads](https://buff.systems/downloads) для файлов. Код сопряжения выдаёт приложение Buff в разделе «Коннекторы»; дальше настройка идёт на локальной странице агента. Подробно — [Установка](https://buff.systems/docs/connector/install) и [Локальная страница](https://buff.systems/docs/connector/web-setup).
 
 ## Свои интеграции в периметре
 

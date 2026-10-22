@@ -72,9 +72,12 @@ The same connector serves every Buff edition — **Community, Enterprise on-prem
 
 **Community** needs nothing — the connector is built into the [installation](https://github.com/buffsystems/buff-community). For Enterprise and SaaS — a binary or an image.
 
-**Binary** for Linux, macOS and Windows, in the [releases](https://github.com/buffsystems/buff-connector/releases) or at [buff.systems/downloads](https://buff.systems/downloads). Verify the checksum and signature **before** running it:
+**Binary** for Linux, macOS and Windows, in this repository's [releases](https://github.com/buffsystems/buff-connector/releases). Download it with the sums and the signature and verify them **before** running it — the public key [`cosign.pub`](cosign.pub) is right here in the repository:
 
 ```sh
+B=https://github.com/buffsystems/buff-connector/releases/latest/download
+curl -fLO $B/connector-linux-amd64 -fLO $B/connector-linux-amd64.sig -fLO $B/SHA256SUMS
+curl -fLO https://raw.githubusercontent.com/buffsystems/buff-connector/main/cosign.pub
 sha256sum -c SHA256SUMS --ignore-missing
 cosign verify-blob --key cosign.pub \
   --signature connector-linux-amd64.sig connector-linux-amd64
@@ -92,7 +95,7 @@ docker run -d --name buff-connector \
   ghcr.io/buffsystems/buff-connector:latest
 ```
 
-The image mirror is `registry.buff.systems/buff/connector`. The pairing code comes from the Buff app, section «Connectors»; the rest is set up on the agent's local page. Details: [Install](https://buff.systems/docs/connector/install) and [Local page](https://buff.systems/docs/connector/web-setup).
+Mirrors: `registry.buff.systems/buff/connector` for the image and [buff.systems/downloads](https://buff.systems/downloads) for the files. The pairing code comes from the Buff app, section «Connectors»; the rest is set up on the agent's local page. Details: [Install](https://buff.systems/docs/connector/install) and [Local page](https://buff.systems/docs/connector/web-setup).
 
 ## Your own integrations inside the perimeter
 
