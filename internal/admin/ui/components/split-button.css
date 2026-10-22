@@ -1,0 +1,43 @@
+/*
+  Split button (#561, for the Buff Code desktop): a main action and a chevron that opens its
+  alternatives, joined into one button. Both halves are .ui-btn of the same variant and size.
+    <div class="ui-split-btn">
+      <button class="ui-btn ui-btn--outline ui-btn--md ui-split-btn__action">Открыть в VS Code</button>
+      <button class="ui-btn ui-btn--outline ui-btn--md ui-split-btn__toggle" aria-label="…"><svg/></button></div>
+*/
+@layer components {
+  .ui-split-btn {
+    display: inline-flex;
+    align-items: stretch;
+  }
+  .ui-split-btn > .ui-split-btn__action {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+  .ui-split-btn > .ui-split-btn__toggle {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    padding-inline: 0.5rem;
+  }
+  .ui-split-btn > .ui-split-btn__toggle.ui-btn--sm {
+    padding-inline: 0.375rem;
+  }
+  /* The seam: the outline's own border, or a faint line in the fill's text colour. */
+  .ui-split-btn > .ui-split-btn__toggle.ui-btn--outline {
+    margin-inline-start: -1px;
+  }
+  .ui-split-btn > .ui-split-btn__toggle:not(.ui-btn--outline) {
+    box-shadow: inset 1px 0 0 color-mix(in srgb, currentColor 25%, transparent);
+  }
+  .ui-split-btn > .ui-split-btn__toggle[data-state='open'] {
+    background-color: var(--muted);
+  }
+  .ui-split-btn > .ui-split-btn__toggle.ui-btn--primary[data-state='open'] {
+    background-color: var(--primary);
+    opacity: 0.9;
+  }
+  .ui-split-btn > .ui-btn:focus-visible {
+    position: relative;
+    z-index: 1;
+  }
+}

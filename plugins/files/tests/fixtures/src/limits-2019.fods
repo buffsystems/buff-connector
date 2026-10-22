@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:number="urn:oasis:names:tc:opendocument:xmlns:datastyle:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.spreadsheet">
+<office:automatic-styles><number:date-style style:name="N1"><number:year number:style="long"/><number:text>-</number:text><number:month number:style="long"/><number:text>-</number:text><number:day number:style="long"/></number:date-style><style:style style:name="ce1" style:family="table-cell" style:data-style-name="N1"/></office:automatic-styles><office:body><office:spreadsheet>
+<table:table table:name="Лимиты 2019">
+<table:table-row><table:table-cell office:value-type="string"><text:p>Система</text:p></table:table-cell><table:table-cell office:value-type="string"><text:p>Лимит</text:p></table:table-cell></table:table-row>
+<table:table-row><table:table-cell office:value-type="string"><text:p>SAP</text:p></table:table-cell><table:table-cell office:value-type="float" office:value="120"><text:p>120</text:p></table:table-cell></table:table-row>
+<table:table-row><table:table-cell office:value-type="string"><text:p>1С</text:p></table:table-cell><table:table-cell office:value-type="float" office:value="45.5"><text:p>45.5</text:p></table:table-cell></table:table-row>
+</table:table>
+<table:table table:name="Ответственные">
+<table:table-row><table:table-cell office:value-type="string"><text:p>Кто</text:p></table:table-cell><table:table-cell office:value-type="string"><text:p>За что</text:p></table:table-cell></table:table-row>
+<table:table-row><table:table-cell office:value-type="string"><text:p>Воронцов</text:p></table:table-cell><table:table-cell office:value-type="string"><text:p>SAP</text:p></table:table-cell></table:table-row>
+</table:table>
+</office:spreadsheet></office:body></office:document>

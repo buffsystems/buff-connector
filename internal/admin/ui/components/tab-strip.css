@@ -1,0 +1,161 @@
+/*
+  Tab strip (#561, for the Buff Code desktop): document tabs — sessions, files, terminals — that
+  close and reorder. Hover tints a tab, the active one is filled; its close button shows on hover,
+  focus or while active (always on touch). While dragged a tab lifts off the strip; the tab it would
+  land against draws a primary bar on that edge. Vertical: a column, bars above and below.
+    <div class="ui-tab-strip" role="tablist" data-orientation="horizontal|vertical">
+      <div class="ui-tab-strip__tab" (data-active) (data-dragging) (data-drop="before|after")>
+        <button class="ui-tab-strip__trigger" role="tab" aria-selected="true">
+          <svg/> <span class="ui-tab-strip__label">Сессия</span></button>
+        <button class="ui-btn ui-btn--icon ui-btn--ghost ui-btn--xs ui-tab-strip__close">×</button>
+      </div></div>
+  Navigation mode (window tabs are links to pages): the strip has no tablist role (a labelled
+  one is role="navigation"), the triggers are plain links, the open one aria-current="page".
+*/
+@layer components {
+  .ui-tab-strip {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+  .ui-tab-strip[data-orientation='vertical'] {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.125rem;
+  }
+
+  .ui-tab-strip__tab {
+    position: relative;
+    display: flex;
+    flex: 0 1 14rem;
+    align-items: center;
+    gap: 0.125rem;
+    min-width: 1.75rem;
+    max-width: 14rem;
+    height: 1.75rem;
+    box-sizing: border-box;
+    border-radius: var(--radius-md);
+    padding-inline: 0.375rem 0.125rem;
+    color: var(--muted-foreground);
+    user-select: none;
+    transition:
+      background-color 150ms,
+      color 150ms;
+  }
+  .ui-tab-strip[data-orientation='vertical'] .ui-tab-strip__tab {
+    flex: none;
+    width: 100%;
+    max-width: none;
+  }
+  .ui-tab-strip__tab:hover {
+    background-color: var(--muted);
+    color: var(--foreground);
+  }
+  .ui-tab-strip__tab[data-active] {
+    background-color: var(--accent);
+    color: var(--foreground);
+  }
+  .ui-tab-strip__tab[data-dragging] {
+    z-index: 1;
+    background-color: var(--popover);
+    color: var(--foreground);
+    box-shadow:
+      0 0 0 1px var(--border),
+      0 4px 12px -2px rgb(0 0 0 / 0.18);
+    cursor: grabbing;
+  }
+
+  /* The landing mark: a 2px bar in the gap on the tab's edge. */
+  .ui-tab-strip__tab[data-drop]::after {
+    content: '';
+    position: absolute;
+    top: 0.125rem;
+    bottom: 0.125rem;
+    width: 2px;
+    border-radius: 999px;
+    background-color: var(--primary);
+    pointer-events: none;
+  }
+  .ui-tab-strip__tab[data-drop='before']::after {
+    inset-inline-start: calc(-0.125rem - 1px);
+  }
+  .ui-tab-strip__tab[data-drop='after']::after {
+    inset-inline-end: calc(-0.125rem - 1px);
+  }
+  .ui-tab-strip[data-orientation='vertical'] .ui-tab-strip__tab[data-drop]::after {
+    inset-inline: 0.25rem;
+    width: auto;
+    height: 2px;
+  }
+  .ui-tab-strip[data-orientation='vertical'] .ui-tab-strip__tab[data-drop='before']::after {
+    top: calc(-0.0625rem - 1px);
+    bottom: auto;
+  }
+  .ui-tab-strip[data-orientation='vertical'] .ui-tab-strip__tab[data-drop='after']::after {
+    top: auto;
+    bottom: calc(-0.0625rem - 1px);
+  }
+
+  .ui-tab-strip__trigger {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    border-radius: inherit;
+    background: none;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1rem;
+    text-align: start;
+    text-decoration: none;
+    outline: none;
+    cursor: default;
+  }
+  .ui-tab-strip__trigger:focus-visible {
+    box-shadow: 0 0 0 2px var(--ring);
+  }
+  .ui-tab-strip__trigger > svg {
+    flex: none;
+    width: 1rem;
+    height: 1rem;
+  }
+  .ui-tab-strip__label {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .ui-tab-strip__close.ui-btn--xs {
+    flex: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: var(--radius-sm);
+    opacity: 0;
+  }
+  .ui-tab-strip__close.ui-btn--xs svg {
+    width: 14px;
+    height: 14px;
+  }
+  .ui-tab-strip__tab:hover .ui-tab-strip__close,
+  .ui-tab-strip__tab[data-active] .ui-tab-strip__close,
+  .ui-tab-strip__tab:focus-within .ui-tab-strip__close {
+    opacity: 1;
+  }
+  .ui-tab-strip__tab[data-dragging] .ui-tab-strip__close {
+    opacity: 0;
+  }
+  @media (hover: none) {
+    .ui-tab-strip__close.ui-btn--xs {
+      opacity: 1;
+    }
+  }
+}

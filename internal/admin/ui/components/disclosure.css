@@ -1,0 +1,151 @@
+/*
+  Disclosure (#561, for the Buff Code desktop): sections that fold open and shut.
+    Collapsible: .ui-collapsible(.ui-collapsible--bordered)[data-state=open|closed]
+                   > button.ui-collapsible__trigger (> svg.ui-collapsible__chevron)
+                   + .ui-collapsible__content (> .ui-collapsible__body in a bordered one)
+    Accordion:   .ui-accordion > .ui-accordion__item > h3.ui-accordion__header
+                   > button.ui-accordion__trigger (> svg.ui-accordion__chevron)
+                   + .ui-accordion__content > .ui-accordion__body
+  The content slides to its measured height (Radix sets --radix-collapsible-content-height);
+  with reduced motion it simply appears.
+*/
+@layer components {
+  .ui-collapsible {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+  .ui-collapsible--bordered {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background-color: var(--card);
+  }
+  .ui-collapsible__trigger {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.375rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--fg-2);
+    padding: 0.25rem 0.25rem 0.25rem 0;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    text-align: left;
+    outline: none;
+    cursor: pointer;
+  }
+  .ui-collapsible__trigger:hover {
+    color: var(--foreground);
+  }
+  .ui-collapsible__trigger:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .ui-collapsible--bordered > .ui-collapsible__trigger {
+    border-radius: 0;
+    padding: 0.625rem 0.75rem;
+  }
+  .ui-collapsible--bordered > .ui-collapsible__trigger:hover {
+    background-color: var(--muted);
+  }
+  .ui-collapsible--bordered > .ui-collapsible__trigger:focus-visible {
+    outline-offset: -2px;
+  }
+  .ui-collapsible--bordered > .ui-collapsible__content {
+    border-top: 1px solid var(--border);
+  }
+  /* The padded inside of a bordered section (padding on the content itself would jump while
+     it slides). */
+  .ui-collapsible__body {
+    padding: 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  .ui-collapsible__chevron,
+  .ui-accordion__chevron {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    color: var(--muted-foreground);
+    transition: transform 150ms;
+  }
+  .ui-collapsible[data-state='open'] > .ui-collapsible__trigger .ui-collapsible__chevron {
+    transform: rotate(90deg);
+  }
+  .ui-collapsible__content,
+  .ui-accordion__content {
+    overflow: hidden;
+  }
+  .ui-collapsible__content[data-state='open'],
+  .ui-accordion__content[data-state='open'] {
+    animation: ui-unfold 180ms ease-out;
+  }
+  .ui-collapsible__content[data-state='closed'],
+  .ui-accordion__content[data-state='closed'] {
+    animation: ui-fold 180ms ease-out;
+  }
+
+  .ui-accordion {
+    display: flex;
+    flex-direction: column;
+  }
+  .ui-accordion__item {
+    border-bottom: 1px solid var(--border);
+  }
+  .ui-accordion__header {
+    display: flex;
+    margin: 0;
+    font: inherit;
+  }
+  .ui-accordion__trigger {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 0;
+    background: none;
+    color: var(--foreground);
+    padding: 0.875rem 0;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    text-align: left;
+    outline: none;
+    cursor: pointer;
+  }
+  .ui-accordion__trigger:hover {
+    color: var(--primary);
+  }
+  .ui-accordion__trigger:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+  .ui-accordion__trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .ui-accordion__trigger[data-state='open'] .ui-accordion__chevron {
+    transform: rotate(180deg);
+  }
+  .ui-accordion__body {
+    padding-bottom: 0.875rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--fg-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-collapsible__content,
+  .ui-accordion__content {
+    animation: none;
+  }
+}

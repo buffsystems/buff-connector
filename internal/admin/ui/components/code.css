@@ -1,0 +1,73 @@
+/*
+  Syntax highlighting (#561, from the app): highlight.js token classes on the --syntax-* tokens,
+  so code follows the theme. The code box itself is .ui-prose pre or the caller's.
+*/
+@layer components {
+  .hljs {
+    color: var(--foreground);
+    background: transparent;
+  }
+  .hljs-comment,
+  .hljs-quote,
+  .hljs-code,
+  .hljs-formula {
+    color: var(--syntax-comment);
+    font-style: italic;
+  }
+  .hljs-keyword,
+  .hljs-doctag,
+  .hljs-type,
+  .hljs-literal,
+  .hljs-name,
+  .hljs-selector-tag,
+  .hljs-template-tag,
+  .hljs-template-variable,
+  .hljs-variable.language_ {
+    color: var(--syntax-keyword);
+  }
+  .hljs-string,
+  .hljs-char,
+  .hljs-regexp,
+  .hljs-meta .hljs-string {
+    color: var(--syntax-string);
+  }
+  .hljs-number,
+  .hljs-attr,
+  .hljs-attribute,
+  .hljs-meta,
+  .hljs-operator,
+  .hljs-selector-attr,
+  .hljs-selector-class,
+  .hljs-selector-id,
+  .hljs-section {
+    color: var(--syntax-number);
+  }
+  .hljs-title,
+  .hljs-title.function_,
+  .hljs-title.class_,
+  .hljs-title.class_.inherited__ {
+    color: var(--syntax-func);
+  }
+  .hljs-built_in,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-variable,
+  .hljs-params {
+    color: var(--syntax-var);
+  }
+  .hljs-subst {
+    color: var(--foreground);
+  }
+  .hljs-emphasis {
+    font-style: italic;
+  }
+  .hljs-strong {
+    font-weight: 600;
+  }
+  .hljs-addition {
+    background: var(--diff-add-bg);
+  }
+  .hljs-deletion {
+    background: var(--diff-del-bg);
+  }
+}

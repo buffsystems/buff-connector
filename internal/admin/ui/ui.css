@@ -1,0 +1,10 @@
+/*
+  @buff/ui — the whole design system as plain CSS (#561): fonts, tokens (light + dark), document
+  defaults and every component's composite classes. Framework-free: a page without Tailwind
+  (the connector) loads exactly this. Tailwind apps load tailwind.css instead.
+*/
+@layer base, components;
+@import './fonts.css';
+@import './tokens.css';
+@import './base.css';
+@import './components.css';

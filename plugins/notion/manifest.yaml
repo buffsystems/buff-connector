@@ -1,0 +1,78 @@
+name: notion
+version: 1.1.0
+host_api: 3
+publisher: buff
+summary: Notion — страницы и базы данных рабочего пространства как контекст для ответов; вопросы в комментариях к странице, отчёт исследования — дочерней страницей
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+# У Notion нет ленты комментариев по рабочему пространству: новый комментарий не
+# меняет страницу, и опросом его можно найти только перебором страниц области.
+# Поэтому вызов от Notion РАЗБИРАЕТСЯ — событие comment.created называет
+# комментарий, интеграция читает его по API и отвечает через секунды. Опрос
+# остаётся страховкой: он обходит страницы области по кругу.
+webhook: deliver
+# Notion подписывает вызовы своим verification_token: он приходит первым,
+# неподписанным вызовом при подтверждении подписки. Коннектор запоминает его сам
+# и показывает на странице подключения — его вставляют в форму подтверждения.
+signature:
+  header: X-Notion-Signature
+  algo: hmac-sha256
+  secret_from: verification_token
+# Умолчание для опроса — каждые 5 секунд: без вебхука это единственный путь
+# заметить обращение. Интервал меняется в настройках подключения.
+poll_seconds: 5
+credentials:
+  - name: api
+    kinds: [bearer]
+egress:
+  - from_config: base_url
+    methods: [GET, POST, PATCH]
+    path_prefixes: ["/v1/"]
+config_schema:
+  type: object
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес API Notion
+      description: Обычно менять не нужно
+      default: https://api.notion.com
+    roots:
+      type: array
+      title: Страницы и базы данных
+      description: >-
+        Ссылки или идентификаторы страниц и баз данных — бот работает в них и
+        во всём, что вложено. Пусто — всё, что открыто интеграции в Notion.
+      items:
+        type: string
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: >-
+        Короткое имя помимо имени интеграции, например buff. В Notion интеграцию нельзя
+        упомянуть через @, поэтому к боту обращаются словом в тексте комментария
+tools:
+  - name: search_pages
+    read_only: true
+    summary: Найти страницы и базы данных по словам в заголовке — когда ответ может быть уже записан в Notion
+  - name: get_page
+    read_only: true
+    summary: Прочитать страницу целиком — текстом с заголовками, списками, таблицами и кодом — вместе с обсуждением
+  - name: get_page_children
+    read_only: true
+    summary: Перечислить вложенные страницы и базы данных раздела — когда ответ собирается из нескольких страниц
+  - name: get_database
+    read_only: true
+    summary: Устройство базы данных — её источники данных и свойства с типами
+  - name: query_database
+    read_only: true
+    summary: Прочитать записи базы данных, при желании отфильтровав по значению свойства
+  - name: get_comments
+    read_only: true
+    summary: Обсуждения страницы — ветки комментариев, кто и когда писал
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий на странице или ответить в ветке обсуждения
+  - name: create_page
+    read_only: false
+    summary: Создать страницу внутри одной из подключённых страниц — из markdown

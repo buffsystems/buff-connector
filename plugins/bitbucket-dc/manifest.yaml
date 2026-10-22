@@ -1,0 +1,55 @@
+name: bitbucket-dc
+version: 1.1.0
+host_api: 1
+publisher: buff
+summary: Bitbucket Data Center и Server — вопросы и ответы прямо в pull request
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+webhook: deliver
+signature:
+  header: X-Hub-Signature
+  algo: hmac-sha256
+credentials:
+  - name: api
+    kinds: [bearer]
+egress:
+  - from_config: base_url
+    methods: [GET, POST]
+    path_prefixes: ["/rest/"]
+config_schema:
+  type: object
+  required: [base_url, repos]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес Bitbucket
+      description: >-
+        Корень сервера вместе с контекстным путём, например
+        https://bitbucket.corp.local
+    repos:
+      type: array
+      title: Репозитории
+      description: >-
+        В этих репозиториях бот отвечает на обращения — и только в них он пишет.
+        Формат КЛЮЧПРОЕКТА/репозиторий, например ACME/api.
+      items:
+        type: string
+        pattern: "^[^/\\s]+/[^/\\s]+$"
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: Дополнительное имя помимо учётной записи, например buff
+tools:
+  - name: search_pulls
+    read_only: true
+    summary: Найти pull request по тексту — когда упомянут номер или нужен контекст из ревью
+  - name: get_pull
+    read_only: true
+    summary: Прочитать pull request с обсуждением — когда нужен замысел изменения или ход ревью
+  - name: get_pull_diff
+    read_only: true
+    summary: Прочитать изменения pull request одним diff
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий в pull request

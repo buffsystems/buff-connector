@@ -1,0 +1,67 @@
+/*
+  Scroll area (#561, for the Buff Code desktop): a pane that scrolls under thin overlay bars,
+  the same on every OS. The root takes the height (or max-height); the viewport fills it.
+    <div class="ui-scroll-area"><div class="ui-scroll-area__viewport">…</div>
+      <div class="ui-scroll-area__bar" data-orientation="vertical"><div class="ui-scroll-area__thumb"></div></div>
+      (<div class="ui-scroll-area__corner"></div>)</div>
+*/
+@layer components {
+  .ui-scroll-area {
+    position: relative;
+    overflow: hidden;
+  }
+  .ui-scroll-area__viewport {
+    width: 100%;
+    height: 100%;
+    max-height: inherit;
+    border-radius: inherit;
+    outline: none;
+  }
+  .ui-scroll-area__viewport:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--ring);
+  }
+  .ui-scroll-area__bar {
+    display: flex;
+    box-sizing: border-box;
+    padding: 2px;
+    touch-action: none;
+    user-select: none;
+    transition: background-color 150ms;
+  }
+  .ui-scroll-area__bar[data-orientation='vertical'] {
+    width: 8px;
+  }
+  .ui-scroll-area__bar[data-orientation='horizontal'] {
+    height: 8px;
+    flex-direction: column;
+  }
+  .ui-scroll-area__thumb {
+    position: relative;
+    flex: 1;
+    border-radius: 999px;
+    background-color: color-mix(in srgb, var(--foreground) 22%, transparent);
+    transition: background-color 150ms;
+  }
+  .ui-scroll-area__bar:hover .ui-scroll-area__thumb,
+  .ui-scroll-area__thumb:active {
+    background-color: color-mix(in srgb, var(--foreground) 38%, transparent);
+  }
+  /* A bigger grab area than the 4px thumb shows. */
+  .ui-scroll-area__thumb::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    min-width: 16px;
+    height: 100%;
+    min-height: 16px;
+    transform: translate(-50%, -50%);
+  }
+  .ui-scroll-area__bar[data-state='hidden'] {
+    opacity: 0;
+  }
+  .ui-scroll-area__corner {
+    background-color: transparent;
+  }
+}

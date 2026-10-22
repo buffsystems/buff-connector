@@ -1,0 +1,93 @@
+name: google-drive
+version: 1.1.0
+host_api: 4
+publisher: buff
+summary: Google Диск — документы, таблицы и презентации как контекст для ответов; вопросы в комментариях к документу, отчёт исследования — новым документом в папке
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+# У Диска нет ленты комментариев по всем файлам, а push-уведомления требуют
+# проверенный HTTPS-домен — поэтому обращения находит опрос: он обходит
+# документы области по кругу и читает комментарии, изменённые после старта.
+poll_seconds: 5
+credentials:
+  - name: api
+    # Два способа войти, на выбор в подключении: сервисный аккаунт (JSON-ключ;
+    # папками делятся с его адресом) или своя учётная запись человека — вход
+    # один раз через браузер, коннектор хранит refresh-токен и обновляет доступ
+    # сам. Плагин ни того, ни другого не видит: он называет учётные данные,
+    # хост подставляет живой bearer.
+    kinds: [service_account, oauth2]
+    oauth:
+      auth_uri_from: auth_uri
+      token_uri_from: token_uri
+      scopes: [https://www.googleapis.com/auth/drive]
+egress:
+  - from_config: drive_api
+    methods: [GET, POST, PATCH]
+    path_prefixes: ["/drive/v3/", "/upload/drive/v3/"]
+  - from_config: sheets_api
+    methods: [GET]
+    path_prefixes: ["/v4/spreadsheets/"]
+config_schema:
+  type: object
+  properties:
+    drive_api:
+      type: string
+      format: uri
+      title: Адрес Drive API
+      description: Обычно менять не нужно
+      default: https://www.googleapis.com
+    sheets_api:
+      type: string
+      format: uri
+      title: Адрес Sheets API
+      description: Обычно менять не нужно
+      default: https://sheets.googleapis.com
+    auth_uri:
+      type: string
+      format: uri
+      title: Адрес входа Google (OAuth)
+      description: Обычно менять не нужно
+      default: https://accounts.google.com/o/oauth2/v2/auth
+    token_uri:
+      type: string
+      format: uri
+      title: Адрес выдачи токенов Google
+      description: Обычно менять не нужно
+      default: https://oauth2.googleapis.com/token
+    roots:
+      type: array
+      title: Папки и файлы
+      description: >-
+        Ссылки или идентификаторы папок и файлов — бот работает в них и во всём, что
+        вложено. Пусто — всё, что открыто учётной записи на Диске.
+      items:
+        type: string
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: >-
+        Короткое имя помимо имени учётной записи, например buff. В комментарии к
+        документу к боту обращаются словом в тексте или упоминанием его адреса
+tools:
+  - name: search_files
+    read_only: true
+    summary: Найти документы, таблицы, презентации и папки по словам в названии и в тексте — когда ответ может быть уже записан на Диске
+  - name: get_file
+    read_only: true
+    summary: Прочитать документ целиком (markdown), таблицу (все листы), презентацию (текст) или папку (содержимое) — вместе с обсуждением
+  - name: list_folder
+    read_only: true
+    summary: Перечислить содержимое папки — когда ответ собирается из нескольких файлов одного раздела
+  - name: get_sheet
+    read_only: true
+    summary: Прочитать один лист или диапазон таблицы — когда нужна конкретная часть большой таблицы
+  - name: get_comments
+    read_only: true
+    summary: Обсуждения файла — ветки комментариев с ответами, кто и когда писал
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий к файлу или ответить в ветке обсуждения
+  - name: create_document
+    read_only: false
+    summary: Создать документ Google из markdown в одной из подключённых папок

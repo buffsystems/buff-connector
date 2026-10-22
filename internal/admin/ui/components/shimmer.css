@@ -1,0 +1,34 @@
+/*
+  Text shimmer (#561, for the Buff Code desktop): a light sweeping across a «thinking…» line
+  while work goes on. [data-active] runs it; without it the text sits in the same muted colour.
+  With reduced motion it never moves.
+    <span class="ui-shimmer" data-active>Думаю…</span>
+*/
+@layer components {
+  .ui-shimmer {
+    color: var(--muted-foreground);
+  }
+  .ui-shimmer[data-active] {
+    background-image: linear-gradient(
+      90deg,
+      var(--muted-foreground) 0%,
+      var(--muted-foreground) 40%,
+      var(--foreground) 50%,
+      var(--muted-foreground) 60%,
+      var(--muted-foreground) 100%
+    );
+    background-size: 250% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: ui-shimmer 2.2s linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-shimmer[data-active] {
+    animation: none;
+    background-image: none;
+    color: var(--muted-foreground);
+  }
+}

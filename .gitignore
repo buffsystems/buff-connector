@@ -1,0 +1,34 @@
+# Build output
+/dist/
+/connector
+*.exe
+*.out
+*.test
+
+# Local agent state (keypair, tokens) — never commit
+/state/
+*.token
+*.key
+*.pem
+
+# Editor / OS
+.DS_Store
+
+# UI test deps (installed locally, not committed)
+/uitest/node_modules/
+/uitest/package-lock.json
+
+# Disposable Jira stand: the licence is Atlassian's to publish, stand.json holds a token
+/uitest/jira-stand/jira-timebomb.lic
+/uitest/jira-stand/stand.json
+
+# E2E harness deps (installed locally, not committed)
+/e2e/node_modules/
+/e2e/package-lock.json
+
+# Python bytecode from running the plugin tests
+__pycache__/
+*.pyc
+
+# The design system package; its CSS is vendored into internal/admin/ui by make ui
+/node_modules/

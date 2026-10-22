@@ -1,0 +1,62 @@
+name: gitea
+version: 1.1.0
+host_api: 1
+publisher: buff
+summary: Gitea и Forgejo — вопросы и ответы прямо в задачах и pull request
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+webhook: deliver
+signature:
+  header: X-Gitea-Signature
+  algo: hmac-sha256
+credentials:
+  - name: api
+    kinds: [bearer]
+egress:
+  - from_config: base_url
+    methods: [GET, POST]
+    path_prefixes: ["/api/v1/"]
+config_schema:
+  type: object
+  required: [base_url, repos]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес Gitea
+      description: Корень сервера, например https://git.corp.local
+    repos:
+      type: array
+      title: Репозитории
+      description: >-
+        В этих репозиториях бот отвечает на обращения — и только в них он пишет.
+        Формат владелец/репозиторий, например acme/api.
+      items:
+        type: string
+        pattern: "^[^/\\s]+/[^/\\s]+$"
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: Дополнительное имя помимо учётной записи, например buff
+    accept_assignment:
+      type: boolean
+      title: Принимать задачи, назначенные боту
+      description: >-
+        По умолчанию бот берётся за работу только по прямому обращению —
+        упоминанию или команде в комментарии. Назначение задачи на его учётную
+        запись тоже адресовано ему, но случается и по правилам маршрутизации,
+        когда работу заказать никто не хотел. Включайте, если назначение у вас
+        делает человек осознанно.
+tools:
+  - name: search_issues
+    read_only: true
+    summary: Найти задачи и pull request по тексту — когда упомянут номер или нужен контекст из трекера
+  - name: get_issue
+    read_only: true
+    summary: Прочитать задачу или pull request с обсуждением — когда нужны требования или ход обсуждения
+  - name: get_pull_diff
+    read_only: true
+    summary: Прочитать изменения pull request одним diff
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий в задачу или pull request

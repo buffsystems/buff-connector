@@ -1,0 +1,73 @@
+/*
+  Copy field (#561, for the Buff Code desktop): a read-only value with a copy button inside its
+  end — a confirmation code, a token, a URL. The muted fill says «not for typing»; after a copy
+  the button shows a check in the success colour. The status line is for assistive tech only.
+    <div class="ui-copy-field">
+      <input class="ui-input ui-copy-field__input (ui-copy-field__input--mono)" readonly value="…">
+      <button class="ui-btn ui-btn--icon ui-btn--ghost ui-btn--xs ui-copy-field__button" (data-copied)>…</button>
+      <span class="ui-copy-field__status" role="status">Скопировано</span></div>
+  Multiline, for a long key or fingerprint shown whole: .ui-copy-field.ui-copy-field--multiline
+  around <textarea class="ui-textarea ui-copy-field__input ui-copy-field__input--multiline"
+  readonly rows="1">; the value wraps anywhere, the button stays at the top end.
+*/
+@layer components {
+  .ui-copy-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+  .ui-copy-field__input {
+    padding-inline-end: 2.25rem;
+    background-color: var(--muted);
+    text-overflow: ellipsis;
+  }
+  .ui-copy-field__input--mono {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+  }
+  .ui-copy-field__button {
+    position: absolute;
+    inset-inline-end: 0.25rem;
+  }
+  .ui-copy-field--multiline {
+    align-items: flex-start;
+  }
+  .ui-copy-field__input--multiline {
+    /* One line is exactly the 36px single-line field: 2px border + 14px + 20px line. */
+    min-height: 2.25rem;
+    padding-block: 0.4375rem;
+    resize: none;
+    overflow-wrap: anywhere;
+  }
+  /* On the first line, where the single-line field has it. */
+  .ui-copy-field--multiline .ui-copy-field__button {
+    top: 0.25rem;
+  }
+  /* Compact (a 28px field): a smaller button so it stays inside the edge. */
+  .ui-copy-field__input.ui-input--sm {
+    padding-inline-end: 1.875rem;
+  }
+  .ui-input--sm ~ .ui-copy-field__button {
+    inset-inline-end: 0.125rem;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+  /* Disabled with its field: no filled square inside the edge. */
+  .ui-copy-field__button:disabled {
+    border-color: transparent;
+    background-color: transparent;
+    opacity: 0.5;
+  }
+  .ui-copy-field__button[data-copied] {
+    color: var(--success);
+  }
+  .ui-copy-field__status {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

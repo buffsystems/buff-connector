@@ -1,0 +1,8 @@
+{
+  "name": "connector-admin-ui",
+  "private": true,
+  "description": "The connector's local page takes its look from the Buff design system (#561); make ui copies the package's plain CSS into internal/admin/ui, which the Go binary embeds.",
+  "dependencies": {
+    "@buff/ui": "git+https://github.com/buffsystems/buff-ui.git#v0.1.3"
+  }
+}

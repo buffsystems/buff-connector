@@ -1,0 +1,439 @@
+/*
+  Floating layers (#561): dialog, menu, tooltip, listbox, toast. The React components render
+  them in a portal (Radix), so no ancestor's overflow or transform clips them.
+    Dialog:  .ui-dialog-overlay + .ui-dialog.ui-dialog--md > __header (__title, __description,
+             __close) + __body + __footer
+    Menu:    .ui-menu > .ui-menu__item(.ui-menu__item--destructive) | __label | __separator
+             An item may end in a key hint: .ui-menu__shortcut. A checkbox/radio item is
+             .ui-menu__item--choice > .ui-menu__indicator (a check, or .ui-menu__dot) first.
+             A submenu row is .ui-menu__item.ui-menu__sub > … + .ui-menu__chevron; its list is
+             another .ui-menu. The context menu shares all of it.
+    Tooltip: .ui-tooltip(.ui-tooltip--popover)
+    Popover: .ui-popover > __title, __description, any content; an optional __arrow (an svg)
+    Listbox: .ui-listbox > .ui-listbox__option[aria-selected][data-active] > __check, __hint
+    Toasts:  .ui-toaster > .ui-toast.ui-toast--success|error|info > __icon, __message, __close;
+             __message holds __title, an optional __description and __actions (buttons)
+*/
+@layer components {
+  .ui-dialog-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: grid;
+    /* One track exactly as wide as the screen less the padding: an auto track would grow to
+       the dialog content's min-content width (a long name, a token) and push it off a phone. */
+    grid-template-columns: minmax(0, 1fr);
+    place-items: center;
+    overflow-y: auto;
+    padding: 1rem;
+    background-color: rgb(0 0 0 / 0.5);
+    backdrop-filter: blur(1px);
+    animation: ui-fade-in 150ms ease-out;
+  }
+  .ui-dialog {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    /* Never wider than the screen, whatever the content; the size caps it on a wide one. */
+    width: min(100%, 100vw - 2rem);
+    min-width: 0;
+    max-height: calc(100dvh - 2rem);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background-color: var(--card);
+    color: var(--card-foreground);
+    box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+    outline: none;
+    animation: ui-fade-in 150ms ease-out;
+  }
+  .ui-dialog--sm {
+    max-width: 24rem;
+  }
+  .ui-dialog--md {
+    max-width: 28rem;
+  }
+  .ui-dialog--lg {
+    max-width: 42rem;
+  }
+  .ui-dialog--xl {
+    max-width: 56rem;
+  }
+  .ui-dialog__header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1.25rem 1.25rem 0;
+  }
+  .ui-dialog__header--closable {
+    padding-right: 3.5rem;
+  }
+  .ui-dialog__heading {
+    flex: 1;
+    min-width: 0;
+  }
+  .ui-dialog__title {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .ui-dialog__description {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    line-height: 1.625;
+    color: var(--muted-foreground);
+  }
+  .ui-dialog__close {
+    position: absolute;
+    top: 0.875rem;
+    right: 0.875rem;
+  }
+  .ui-dialog__body {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0.75rem 1.25rem 0;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  /* A body that carries its own actions ends the dialog: give it the bottom edge too. (The ×
+     comes after it in the DOM, so «no footer follows», not «last child».) */
+  .ui-dialog__body:not(:has(~ .ui-dialog__footer)) {
+    padding-bottom: 1.25rem;
+  }
+  .ui-dialog__footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 1.25rem;
+  }
+  /* Three actions do not fit a phone: stack them, the primary on top. */
+  @media (max-width: 39.99rem) {
+    .ui-dialog__footer--stack {
+      flex-direction: column-reverse;
+    }
+  }
+
+  .ui-menu {
+    z-index: 50;
+    box-sizing: border-box;
+    min-width: 8rem;
+    max-height: var(
+      --radix-dropdown-menu-content-available-height,
+      var(--radix-context-menu-content-available-height, 24rem)
+    );
+    overflow: hidden auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+    padding: 0.25rem;
+    box-shadow:
+      0 4px 6px -1px rgb(0 0 0 / 0.1),
+      0 2px 4px -2px rgb(0 0 0 / 0.1);
+    animation: ui-pop-in 120ms ease-out;
+  }
+  .ui-menu__item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: calc(var(--radius) - 6px);
+    padding: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    outline: none;
+    cursor: default;
+    user-select: none;
+  }
+  .ui-menu__item svg {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+  }
+  .ui-menu__item:focus,
+  .ui-menu__item[data-highlighted] {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+  }
+  /* A choice menu: the label takes the row, the check of the current choice sits at the end. */
+  .ui-menu__text {
+    flex: 1;
+  }
+  .ui-menu__item .ui-menu__check {
+    color: var(--primary);
+  }
+  .ui-menu__item[data-disabled] {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+  .ui-menu__item--destructive {
+    color: var(--destructive);
+  }
+  .ui-menu__item--destructive:focus,
+  .ui-menu__item--destructive[data-highlighted] {
+    background-color: color-mix(in srgb, var(--destructive) 10%, transparent);
+    color: var(--destructive);
+  }
+  /* A key hint at the row's end: quiet, never wraps. */
+  .ui-menu__shortcut {
+    margin-left: auto;
+    padding-left: 1rem;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.05em;
+    color: var(--muted-foreground);
+  }
+  .ui-menu__item--destructive .ui-menu__shortcut {
+    color: inherit;
+    opacity: 0.7;
+  }
+  /* Checkbox and radio items: a fixed leading slot, so checked and unchecked rows align. */
+  .ui-menu__indicator {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: var(--primary);
+  }
+  .ui-menu__dot {
+    display: block;
+    width: 0.375rem;
+    height: 0.375rem;
+    border-radius: 9999px;
+    background-color: currentColor;
+  }
+  /* The submenu row stays lit while its list is open. */
+  .ui-menu__sub[data-state='open'] {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+  }
+  .ui-menu__item .ui-menu__chevron {
+    margin-left: auto;
+    color: var(--muted-foreground);
+  }
+  .ui-menu__label {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+  .ui-menu__separator {
+    height: 1px;
+    margin: 0.25rem -0.25rem;
+    background-color: var(--border);
+  }
+
+  .ui-tooltip {
+    z-index: 50;
+    width: fit-content;
+    max-width: 20rem;
+    border-radius: var(--radius-md);
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.375;
+    animation: ui-pop-in 120ms ease-out;
+  }
+  .ui-tooltip--popover {
+    border: 1px solid var(--border);
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+
+  /* A panel beside a control: the menu's surface with room for fields and buttons. It does not
+     scroll (that would clip the arrow): a long list inside goes in a ScrollArea. */
+  .ui-popover {
+    z-index: 50;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(20rem, var(--radix-popover-content-available-width, 20rem));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+    padding: 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    outline: none;
+    box-shadow:
+      0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
+    animation: ui-pop-in 120ms ease-out;
+    transform-origin: var(--radix-popover-content-transform-origin);
+  }
+  .ui-popover__title {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .ui-popover__description {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+  .ui-popover__title + .ui-popover__description {
+    margin-top: 0.25rem;
+  }
+  /* The arrow's own coordinates point it at the trigger whatever the side (Radix rotates it). */
+  .ui-popover__arrow {
+    display: block;
+    margin-top: -1px;
+    overflow: visible;
+    fill: var(--popover);
+    stroke: var(--border);
+    stroke-width: 1px;
+  }
+
+  .ui-listbox {
+    z-index: 60;
+    box-sizing: border-box;
+    width: max-content;
+    margin: 0.25rem 0;
+    overflow-y: auto;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background-color: var(--card);
+    padding: 0.25rem 0;
+    box-shadow:
+      0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+  .ui-listbox__option {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: 0.5rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    text-align: left;
+    padding: 0.375rem 0.75rem;
+  }
+  .ui-listbox__option:hover,
+  .ui-listbox__option[data-active='true'] {
+    background-color: var(--muted);
+  }
+  .ui-listbox__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ui-listbox__check {
+    flex-shrink: 0;
+    width: 13px;
+    height: 13px;
+    opacity: 0;
+    color: var(--primary);
+  }
+  .ui-listbox__option[aria-selected='true'] .ui-listbox__check {
+    opacity: 1;
+  }
+  .ui-listbox__hint {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--muted-foreground);
+  }
+
+  .ui-toaster {
+    pointer-events: none;
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 20rem;
+    max-width: calc(100vw - 2rem);
+  }
+  .ui-toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+    padding: 0.625rem 0.875rem;
+    font-size: 13px;
+    box-shadow:
+      0 10px 15px -3px rgb(0 0 0 / 0.1),
+      0 4px 6px -4px rgb(0 0 0 / 0.1);
+    animation: ui-rise-in 150ms ease-out;
+  }
+  .ui-toast--success {
+    border-color: color-mix(in srgb, var(--success) 40%, transparent);
+    background-color: var(--success-soft);
+    color: var(--success-soft-foreground);
+  }
+  .ui-toast--error {
+    border-color: color-mix(in srgb, var(--destructive) 40%, transparent);
+    background-color: var(--destructive-soft);
+    color: var(--destructive-soft-foreground);
+  }
+  .ui-toast__icon {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.125rem;
+  }
+  .ui-toast__message {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+    line-height: 1.625;
+    overflow-wrap: anywhere;
+  }
+  /* A lone line reads as before; with a description or actions under it, it is the heading. */
+  .ui-toast__title:not(:only-child) {
+    font-weight: 500;
+  }
+  .ui-toast__description {
+    font-size: 12px;
+    line-height: 1.5;
+    opacity: 0.8;
+  }
+  .ui-toast__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.375rem;
+  }
+  .ui-toast__close {
+    flex-shrink: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    padding: 0;
+    opacity: 0.6;
+  }
+  .ui-toast__close:hover {
+    opacity: 1;
+  }
+  .ui-toast__close svg {
+    width: 14px;
+    height: 14px;
+  }
+}

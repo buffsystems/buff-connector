@@ -1,0 +1,19 @@
+/*
+  Geist — self-hosted variable faces (#270, #561). The consumer's bundler resolves the URLs, so
+  they follow the app's base path; nothing is fetched from a font CDN, which a relayed app could
+  not reach anyway. `swap` keeps text visible while the face loads.
+*/
+@font-face {
+  font-family: 'Geist';
+  src: url('./fonts/Geist-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('./fonts/GeistMono-Variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}

@@ -1,0 +1,1646 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Buff Connector — настройка</title>
+    <link rel="icon" href="/brand/favicon.svg" type="image/svg+xml" />
+    <script>
+      // Anti-flash: paint the stored theme before the first frame. The same contract as
+      // the apps (@buff/ui's useTheme): the 'theme' key, light | dark | system, system by
+      // default; the theme switch in the header below keeps it in step.
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          var dark = t === "dark" || ((t !== "light") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {}
+      })();
+    </script>
+    <!-- The Buff design system's plain CSS (#561): fonts, tokens for both themes, document
+         defaults and the composite ui-* classes, embedded in the binary and served at /ui/.
+         The page's own <style> below holds only its layout and what the catalogue lacks. -->
+    <link rel="stylesheet" href="/ui/ui.css" />
+    <style>
+      /*
+        Only what the design system does not carry: the page's layout and the few pieces its
+        catalogue has no class for, all on its tokens. Every control, surface, badge, notice
+        and text role on this page is a ui-* class from /ui/ui.css.
+      */
+
+      /* The document reset the apps get from their Tailwind preflight. Layered as base, so
+         it never outranks a ui-* class. */
+      @layer base {
+        *, *::before, *::after { box-sizing: border-box; }
+        h1, h2, h3, p, ol, ul, pre { margin: 0; }
+        h1, h2, h3 { font-size: inherit; font-weight: inherit; }
+        code { font-family: var(--font-mono); font-size: 0.875em; }
+        summary { cursor: pointer; }
+      }
+
+      /* ---- shell ------------------------------------------------------------
+         The page used to be one endless column: relay, repositories, catalogue,
+         plugins and tracker all stacked into a single scroll. That is not a
+         cosmetic complaint. The operator comes here to answer ONE question —
+         "is it linked?", "what is this plugin allowed to do?" — and a single
+         column makes them scroll past four answers they did not ask for to
+         reach it. Each section now stands on its own and fits a screen. */
+      .shell {
+        display: grid;
+        grid-template-columns: 244px minmax(0, 1fr);
+        max-width: 1180px;
+        margin: 0 auto;
+        min-height: 100vh;
+      }
+      .nav {
+        display: flex;
+        flex-direction: column;
+        gap: 1.15rem;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow: auto;
+        padding: 1.5rem 0.9rem;
+        border-right: 1px solid var(--border);
+      }
+      .brand { display: flex; align-items: center; gap: 0.6rem; padding: 0 0.35rem; }
+      /* The product's mark — the same glyph the app and the site carry, drawn in
+         currentColor so it reads in either scheme. Restated, never invented:
+         see the note in admin.go for where it comes from. */
+      .mark { flex: none; display: block; color: var(--primary); }
+      .brand-name { display: block; font-weight: 600; }
+      .brand-host { font-family: var(--font-mono); }
+
+      /* The section list is the design system's side navigation (ui-nav); a section the
+         connector does not offer is hidden, an empty count takes no room. */
+      .ui-nav-item[hidden], .ui-nav-item .ui-count:empty { display: none; }
+      .ui-nav-item[aria-current="page"] .ui-count { background: var(--primary); color: var(--primary-foreground); }
+      .nav-foot { margin-top: auto; padding: 0 0.35rem; }
+
+      main { min-width: 0; padding: 2.1rem 2rem 4rem; }
+
+      /* The page header: the design system's, kept a row on a phone too — its only
+         action is the 28px theme switch, which belongs beside the title, not under it. */
+      .page-head { flex-direction: row; align-items: flex-start; }
+      .page-head .ui-page-header__main { flex: 1; }
+      .page-head .ui-page-header__actions > * { flex: none; }
+
+      /* The theme switch's menu drops from its trigger (the apps draw it in a portal). */
+      .theme { position: relative; }
+      .theme .ui-menu { position: absolute; top: calc(100% + 0.25rem); right: 0; min-width: 10rem; }
+      .ui-menu__item { cursor: pointer; }
+      .ui-menu__item[aria-checked="false"] .ui-menu__check { visibility: hidden; }
+      /* The trigger shows the mode actually painted. */
+      html.dark [data-icon="sun"], html:not(.dark) [data-icon="moon"] { display: none; }
+
+      /* ---- layout -------------------------------------------------------------
+         Blocks stack with gaps, never margins; a slot with nothing in it yet (a
+         banner, a status line, a form not opened) takes no room. */
+      [data-panel] { display: flex; flex-direction: column; gap: 1.25rem; margin-top: 1.5rem; }
+      [data-panel][hidden] { display: none; }
+      .stack { display: flex; flex-direction: column; gap: 0.75rem; }
+      .stack--tight { gap: 0.375rem; }
+      .stack--loose { gap: 1.25rem; }
+      [data-panel] > :empty, .stack > :empty { display: none; }
+      .ui-card__content:not(:has(> :not(:empty))) { display: none; }
+      .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+      .actions--end { justify-content: flex-end; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+      .grid--wide-end { grid-template-columns: 1fr 2fr; }
+      .sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+      .tools { display: flex; flex-wrap: wrap; gap: 0.375rem; }
+      .title-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.375rem; line-height: 1.5rem; }
+      .group-title { padding-top: 0.5rem; }
+      .bullets { padding-left: 1.1rem; }
+      .bullets li + li { margin-top: 0.25rem; }
+      .status-line:not(:empty) { margin-top: 0.75rem; }
+
+      /* ---- pieces the catalogue lacks ------------------------------------------ */
+      /* The outcome of an action, written beside it by the script. */
+      .ok { color: var(--success); }
+      .err { color: var(--destructive); }
+      /* The quieter second line inside a notice. */
+      .callout-note { margin-top: 0.25rem; opacity: 0.85; }
+      .ui-stat__value .ui-dot { align-self: center; }
+      .ui-stat__note { overflow-wrap: anywhere; }
+      /* A tool is an identifier: set in the code face. */
+      .tool-name { font-family: var(--font-mono); }
+      .tool-mark { cursor: pointer; }
+      /* A hint that follows the pointer, drawn by the page: the browser's own
+         title tooltip waits a second and cannot be styled or read on touch. */
+      .tip { cursor: help; }
+      #tooltip { position: fixed; pointer-events: none; }
+      /* The native <dialog> wears ui-dialog: fixed and centred in the viewport like the UA's
+         modal (ui-dialog's relative would pin it to the top of the document), the backdrop
+         the overlay's. */
+      dialog.ui-dialog { position: fixed; width: calc(100% - 2rem); padding: 0; }
+      dialog.ui-dialog:not([open]) { display: none; }
+      dialog.ui-dialog::backdrop { background: rgb(0 0 0 / 0.5); backdrop-filter: blur(1px); }
+      .counter { display: flex; justify-content: space-between; gap: 0.6rem; }
+      .counter.over { color: var(--destructive); }
+      #i-notes { min-height: 7.5rem; }
+      .repo-list { max-height: 220px; overflow: auto; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.75rem; }
+      /* A file drop target: the empty-state box that lights up while a file hovers it. */
+      .drop { cursor: pointer; padding: 1.25rem 1rem; }
+      .drop.over { border-color: var(--primary); background: var(--brand-soft); color: var(--brand-soft-foreground); }
+      .drop b { display: block; margin-bottom: 0.2rem; color: var(--foreground); }
+      /* An address the connector ISSUES, not one anybody types. It used to be an
+         input with readonly, which looks exactly like a field you may edit. */
+      .hookurl { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; padding: 0.75rem; }
+      .hookurl code { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--foreground); }
+      .log { max-height: 220px; }
+      details[open] > summary { margin-bottom: 0.5rem; }
+
+      @media (max-width: 900px) {
+        .shell { grid-template-columns: 1fr; align-content: start; }
+        .nav {
+          position: static; height: auto; flex-direction: row; align-items: center;
+          gap: 0.8rem; padding: 0.7rem 0.85rem;
+          border-right: 0; border-bottom: 1px solid var(--border);
+        }
+        .nav .ui-nav { flex-direction: row; gap: 0.2rem; }
+        .nav .ui-nav-item { flex: none; width: auto; }
+        .brand div, .nav-foot { display: none; }
+        main { padding: 1.4rem 1rem 3rem; }
+      }
+
+      @media (max-width: 560px) {
+        .grid, .sources { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="nav">
+        <div class="brand">
+          <svg class="mark" width="26" height="26" viewBox="1 1 22 22" fill="none" stroke="currentColor"
+               stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 18V5" />
+            <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" />
+            <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" />
+            <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77" />
+            <path d="M18 18a4 4 0 0 0 2-7.464" />
+            <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" />
+            <path d="M6 18a4 4 0 0 1-2-7.464" />
+            <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77" />
+          </svg>
+          <div>
+            <b class="brand-name">Buff Connector</b>
+            <span class="ui-hint brand-host" id="navHost">127.0.0.1</span>
+          </div>
+        </div>
+        <nav class="ui-nav" aria-label="Разделы">
+          <a class="ui-nav-item" href="#/overview" data-nav="overview"><span class="ui-nav-item__label">Обзор</span><span class="ui-count" id="b-overview"></span></a>
+          <a class="ui-nav-item" href="#/link" data-nav="link"><span class="ui-nav-item__label">Подключение</span><span class="ui-count" id="b-link"></span></a>
+          <a class="ui-nav-item" href="#/repos" data-nav="repos"><span class="ui-nav-item__label">Репозитории</span><span class="ui-count" id="b-repos"></span></a>
+          <a class="ui-nav-item" href="#/market" data-nav="market" id="nav-market" hidden><span class="ui-nav-item__label">Каталог</span><span class="ui-count" id="b-market"></span></a>
+          <a class="ui-nav-item" href="#/plugins" data-nav="plugins" id="nav-plugins" hidden><span class="ui-nav-item__label">Интеграции</span><span class="ui-count" id="b-plugins"></span></a>
+          <a class="ui-nav-item" href="#/mcp" data-nav="mcp" id="nav-mcp" hidden><span class="ui-nav-item__label">Свои MCP</span><span class="ui-count" id="b-mcp"></span></a>
+          <a class="ui-nav-item" href="#/ide" data-nav="ide"><span class="ui-nav-item__label">Buff Code</span><span class="ui-count" id="b-ide"></span></a>
+        </nav>
+        <p class="nav-foot ui-hint">Всё локально. Токены остаются на этой машине и в облако не уходят.</p>
+      </aside>
+
+      <main>
+        <header class="ui-page-header page-head">
+          <div class="ui-page-header__main">
+            <div class="ui-eyebrow">Настройка коннектора</div>
+            <h1 class="ui-page-header__title" id="title">Обзор</h1>
+            <p class="ui-page-header__subtitle" id="lede"></p>
+          </div>
+          <div class="ui-page-header__actions theme">
+            <button type="button" id="themeButton" class="ui-btn ui-btn--icon ui-btn--ghost ui-btn--xs"
+                    aria-label="Переключить тему" title="Переключить тему"
+                    aria-haspopup="menu" aria-expanded="false" aria-controls="themeMenu">
+              <svg data-icon="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>
+              <svg data-icon="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
+            </button>
+            <div class="ui-menu" id="themeMenu" role="menu" aria-label="Тема" hidden>
+              <div class="ui-menu__item" role="menuitemradio" tabindex="-1" aria-checked="false" data-theme-value="light">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg><span class="ui-menu__text">Светлая</span><svg class="ui-menu__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+              </div>
+              <div class="ui-menu__item" role="menuitemradio" tabindex="-1" aria-checked="false" data-theme-value="dark">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg><span class="ui-menu__text">Тёмная</span><svg class="ui-menu__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+              </div>
+              <div class="ui-menu__item" role="menuitemradio" tabindex="-1" aria-checked="false" data-theme-value="system">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></svg><span class="ui-menu__text">Системная</span><svg class="ui-menu__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- Обзор -->
+        <section data-panel="overview">
+          <div id="ovBanner" class="stack"></div>
+          <div class="ui-stat-grid ui-stat-grid--4" id="ovStats"></div>
+          <div class="ui-card">
+            <div class="ui-card__header"><h2 class="ui-card__title">Что дальше</h2></div>
+            <div class="ui-card__content"><ol class="bullets" id="ovNext"></ol></div>
+          </div>
+        </section>
+
+        <!-- Подключение -->
+        <section data-panel="link" hidden>
+          <div class="ui-card">
+            <div class="ui-card__header"><h2 class="ui-card__title">Связь с платформой</h2></div>
+            <div class="ui-card__content stack">
+              <label class="ui-field"><span class="ui-label">Адрес relay — уже задан, обычно менять не нужно</span>
+                <input id="mw" class="ui-input" placeholder="wss://buff.systems/nats" /></label>
+              <label class="ui-field" title="state_dir"><span class="ui-label">Папка, где коннектор хранит настройки и ключи</span>
+                <input id="state" class="ui-input" placeholder="/var/lib/connector" /></label>
+            </div>
+            <div class="ui-card__footer actions">
+              <button class="ui-btn ui-btn--outline ui-btn--md" onclick="saveLink()">Сохранить</button>
+              <span id="lstatus" class="ui-note"></span>
+            </div>
+          </div>
+
+          <div class="ui-card">
+            <div class="ui-card__header">
+              <h2 class="ui-card__title">Приём событий</h2>
+              <p class="ui-card__description">
+                Слушает сам коннектор — один адрес на все подключения. Опрос работает и без этого:
+                приёмник нужен, только чтобы события приходили сразу, а не к следующему опросу.
+                Сами интеграции портов не открывают.
+              </p>
+            </div>
+            <div class="ui-card__content stack">
+              <label class="ui-field"><span class="ui-label">Слушать на (пусто — приёмник выключен)</span>
+                <input id="hooklisten" class="ui-input" placeholder="0.0.0.0:8766" /></label>
+              <label class="ui-field"><span class="ui-label">Адрес, по которому до него достучится ваш трекер</span>
+                <input id="hookhost" class="ui-input" placeholder="connector.corp.local:8766" /></label>
+              <p class="ui-note">
+                Этот адрес коннектор вставит в ссылки для трекеров. Если в поле выше стоит
+                <code>0.0.0.0</code> («на всех адресах машины»), укажите здесь имя, под которым машину
+                видят в сети. Если коннектор доступен по адресу выше, оставьте пустым.
+              </p>
+            </div>
+            <div class="ui-card__footer actions">
+              <button class="ui-btn ui-btn--outline ui-btn--md" onclick="saveLink()">Сохранить</button>
+              <span id="hstatus" class="ui-note"></span>
+            </div>
+          </div>
+
+          <div class="ui-card">
+            <div class="ui-card__header">
+              <h2 class="ui-card__title">Привязка</h2>
+              <p class="ui-card__description" id="pairHint">Сначала сохраните хотя бы одного провайдера или интеграцию. Затем вставьте одноразовый код из приложения Buff.</p>
+            </div>
+            <div class="ui-card__content">
+              <label class="ui-field"><span class="ui-label">Код привязки</span>
+                <input id="code" class="ui-input" placeholder="bufc_…" /></label>
+            </div>
+            <div class="ui-card__footer actions">
+              <button class="ui-btn ui-btn--primary ui-btn--md" onclick="doPair()">Привязать и подключить</button>
+              <span id="pstatus" class="ui-note"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Репозитории -->
+        <section data-panel="repos" hidden>
+          <div>
+            <div class="ui-section-header"><h2 class="ui-section-header__title">Подключённые провайдеры</h2></div>
+            <div id="provs"><div class="ui-empty ui-empty--inline">Загрузка…</div></div>
+          </div>
+
+          <div class="ui-card">
+            <div class="ui-card__header"><h2 class="ui-card__title">Добавить провайдера</h2></div>
+            <div class="ui-card__content stack">
+              <div class="grid grid--wide-end">
+                <label class="ui-field"><span class="ui-label">Тип</span>
+                  <span class="ui-select"><select id="kind">
+                    <option value="gitlab">GitLab (self-hosted / gitlab.com)</option>
+                    <option value="ghe">GitHub Enterprise</option>
+                    <option value="github">GitHub.com</option>
+                    <option value="gitea">Gitea / Forgejo</option>
+                    <option value="bitbucket-server">Bitbucket Server / Data Center</option>
+                    <option value="bitbucket">Bitbucket.org</option>
+                  </select></span></label>
+                <label class="ui-field"><span class="ui-label">Base URL</span>
+                  <input id="base" class="ui-input" placeholder="https://gitlab.corp.local" /></label>
+              </div>
+              <label class="ui-field"><span class="ui-label">Токен доступа (остаётся у вас)</span>
+                <input id="token" class="ui-input" type="password" placeholder="glpat-…" /></label>
+              <div class="actions">
+                <button class="ui-btn ui-btn--outline ui-btn--md" onclick="validate()">Проверить доступ</button>
+                <span id="vstatus" class="ui-note"></span>
+              </div>
+              <div id="repobox" class="stack" style="display: none">
+                <span class="ui-label">Репозитории (отметьте нужные)</span>
+                <div id="repos" class="ui-panel ui-panel--inset repo-list"></div>
+                <div><button class="ui-btn ui-btn--primary ui-btn--md" onclick="addProvider()">Добавить провайдера</button></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Каталог -->
+        <section data-panel="market" hidden>
+          <div class="stack stack--tight">
+            <p id="catalogState" class="ui-note">Загрузка…</p>
+            <p id="catalogSource" class="ui-note"></p>
+          </div>
+          <div id="catalog" class="stack"></div>
+        </section>
+
+        <!-- Интеграции -->
+        <section data-panel="plugins" hidden>
+          <div id="pluginsCard" class="stack stack--loose">
+            <div id="isolationBanner" class="stack"></div>
+
+            <div>
+              <div class="ui-section-header"><h2 class="ui-section-header__title">Подключения</h2></div>
+              <div id="instances" class="stack"><div class="ui-empty ui-empty--inline">Пока нет подключений.</div></div>
+            </div>
+            <div id="instanceForm"></div>
+
+            <div>
+              <div class="ui-section-header"><h2 class="ui-section-header__title">Установленный код</h2></div>
+              <div id="installed" class="stack"><div class="ui-empty ui-empty--inline">Пока ничего не установлено.</div></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Buff Code (#368) -->
+        <section data-panel="ide" hidden>
+          <div>
+            <div class="ui-section-header"><h2 class="ui-section-header__title">Разработчики</h2></div>
+            <div id="ideDevs" class="stack"><div class="ui-empty ui-empty--inline">Пока никто не звал инструменты из Buff Code.</div></div>
+          </div>
+        </section>
+
+        <!-- Свои MCP -->
+        <section data-panel="mcp" hidden>
+          <div class="ui-callout ui-callout--warn"><div class="ui-callout__text"><b>Этот код никто не проверял.</b> Сервер, который вы приносите сами, работает
+            под отдельным пользователем ОС на этой машине, но в сеть ходит сам — коннектор его обращения не
+            ограничивает и не видит. Ставьте только то, чему доверяете. В приложении такое подключение помечено
+            как пользовательское.</div></div>
+          <p id="mcpToolchain" class="ui-note"></p>
+
+          <div>
+            <div class="ui-section-header"><h2 class="ui-section-header__title">Добавить сервер</h2></div>
+            <div class="sources">
+              <div class="ui-card">
+                <div class="ui-card__header">
+                  <h3 class="ui-card__title">Архив</h3>
+                  <p class="ui-card__description">MCP Bundle (<code>.mcpb</code>, <code>.dxt</code>) или архив с исходником
+                    сервера (<code>.zip</code>, <code>.tar.gz</code>). Способ запуска коннектор прочитает из упаковки.</p>
+                </div>
+                <div class="ui-card__content">
+                  <div id="mcpDrop" class="ui-empty drop" onclick="$('mcpFile').click()"><b>Перетащите файл сюда</b>или нажмите, чтобы выбрать</div>
+                  <input id="mcpFile" type="file" hidden accept=".mcpb,.dxt,.zip,.tar.gz,.tgz,.tar" onchange="mcpUpload(this.files[0])" />
+                </div>
+              </div>
+              <div class="ui-card">
+                <div class="ui-card__header"><h3 class="ui-card__title">Репозиторий GitHub</h3></div>
+                <div class="ui-card__content stack">
+                  <label class="ui-field"><span class="ui-label">Адрес</span>
+                    <input id="mcpRepo" class="ui-input" placeholder="https://github.com/owner/repo" /></label>
+                  <label class="ui-field"><span class="ui-label">Токен — только для приватного репозитория</span>
+                    <input id="mcpRepoToken" class="ui-input" type="password" autocomplete="off" placeholder="необязательно" /></label>
+                </div>
+                <div class="ui-card__footer actions actions--end"><button class="ui-btn ui-btn--primary ui-btn--md" onclick="mcpGithub()">Загрузить</button></div>
+              </div>
+              <div class="ui-card">
+                <div class="ui-card__header">
+                  <h3 class="ui-card__title">Удалённый сервер</h3>
+                  <p class="ui-card__description">Сервер, который уже работает где-то по адресу (Streamable HTTP).</p>
+                </div>
+                <div class="ui-card__content">
+                  <label class="ui-field"><span class="ui-label">Адрес</span>
+                    <input id="mcpUrl" class="ui-input" placeholder="https://mcp.example.com/mcp" /></label>
+                </div>
+                <div class="ui-card__footer actions actions--end"><button class="ui-btn ui-btn--primary ui-btn--md" onclick="mcpRemote()">Подключить</button></div>
+              </div>
+            </div>
+            <div id="mcpStatus" class="ui-note status-line"></div>
+          </div>
+          <div id="mcpForm"></div>
+
+          <div>
+            <div class="ui-section-header"><h2 class="ui-section-header__title">Свои серверы</h2></div>
+            <div id="mcpList" class="stack"><div class="ui-empty ui-empty--inline">Пока нет.</div></div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+
+    <div id="tooltip" class="ui-tooltip" role="tooltip" hidden></div>
+    <dialog id="notesRisk" class="ui-dialog ui-dialog--md" aria-labelledby="notesRiskTitle">
+      <div class="ui-dialog__header">
+        <div class="ui-dialog__heading"><h3 class="ui-dialog__title" id="notesRiskTitle">Снять ограничение длины пояснений?</h3></div>
+      </div>
+      <div class="ui-dialog__body stack">
+        <p>Пояснения попадают в системный промпт модели вместе с описанием инструментов этого
+          подключения — <b>в каждом прогоне</b>, где оно используется.</p>
+        <p>Избыточный текст ухудшает работу модели: она хуже следует инструкциям, чаще путает
+          детали и дороже стоит. Ограничение в 2048 символов — защита от этого. Сняв его, вы берёте
+          ответственность за объём на себя; коннектор ничего не обрежет.</p>
+      </div>
+      <div class="ui-dialog__footer">
+        <button type="button" class="ui-btn ui-btn--outline ui-btn--md" onclick="notesRiskAnswer(false)">Оставить ограничение</button>
+        <button type="button" class="ui-btn ui-btn--primary ui-btn--md" onclick="notesRiskAnswer(true)">Понимаю риск, снять</button>
+      </div>
+    </dialog>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let st = { middleware_url: "", state_dir: "", providers: [] };
+
+      // Every save carries the fingerprint the page loaded with, so a save is
+      // refused rather than overwriting an edit made meanwhile from the CLI or
+      // from the operator's own editor.
+      async function api(path, body) {
+        // Every write carries it, not just the settings form: instance edits go
+        // through their own endpoints and are just as capable of overwriting a
+        // change made meanwhile from the CLI.
+        if (body && (path === "/api/save" || path.startsWith("/api/instances/") || path.startsWith("/api/mcp/")))
+          body.fingerprint = st.fingerprint || "";
+        const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json", "X-Buff-Local": "1" }, body: JSON.stringify(body) } : {});
+        return r.json();
+      }
+
+
+
+      // ---- sections -----------------------------------------------------
+      // One section at a time, addressed by hash: the operator can bookmark
+      // "the plugins page", reload without losing their place, and — the part
+      // that matters on a screen share — send a colleague a link to the exact
+      // thing they are looking at.
+      const SECTIONS = {
+        overview: { title: "Обзор", lede: "Что коннектор делает прямо сейчас и чего ему не хватает." },
+        link: { title: "Подключение", lede: "Адрес relay, каталог состояния и одноразовый код привязки. Ключ коннектора остаётся на этой машине." },
+        repos: { title: "Репозитории", lede: "Провайдеры git, к которым коннектор ходит изнутри вашей сети. Токен не покидает эту машину." },
+        market: { title: "Каталог", lede: "Подписанные нами интеграции. Что интеграция получит — видно до установки, а не после." },
+        plugins: { title: "Интеграции", lede: "Подключение — отдельный процесс под собственным пользователем ОС: он не видит ни ключа коннектора, ни ваших токенов и ходит только по адресам, которые вы указали." },
+        mcp: { title: "Свои MCP", lede: "Сервер MCP, который вы приносите сами: из архива, из репозитория GitHub или по адресу. Прогоны платформы получат его инструменты так же, как инструменты интеграций из каталога, — но только те, что вы отметите как читающие. Разработчикам в Buff Code доступны все, каждый вызов виден в разделе «Buff Code»." },
+        ide: { title: "Buff Code", lede: "Разработчики вашей организации получают инструменты этих подключений в Buff Code через шлюз коннектора. Здесь видно, кто и сколько их вызывал с запуска коннектора; каждый вызов уходит и в журнал платформы с именем разработчика." },
+      };
+
+      function show(name) {
+        if (!SECTIONS[name]) name = "overview";
+        for (const p of document.querySelectorAll("[data-panel]")) p.hidden = p.dataset.panel !== name;
+        for (const a of document.querySelectorAll("[data-nav]")) {
+          if (a.dataset.nav === name) a.setAttribute("aria-current", "page");
+          else a.removeAttribute("aria-current");
+        }
+        $("title").textContent = SECTIONS[name].title;
+        $("lede").textContent = SECTIONS[name].lede;
+        if (location.hash !== "#/" + name) history.replaceState(null, "", "#/" + name);
+        window.scrollTo(0, 0);
+      }
+      const current = () => location.hash.replace(/^#\//, "");
+      window.addEventListener("hashchange", () => show(current()));
+
+      function badge(id, text) {
+        $("b-" + id).textContent = text || "";
+        $("b-" + id).classList.toggle("ui-count--warn", text === "!");
+      }
+
+      // ---- overview -----------------------------------------------------
+      // Four facts and a next step. An operator who has just installed the
+      // connector should not have to open five sections to learn whether it
+      // works.
+      function renderOverview() {
+        const inst = pstate.instances || [];
+        const running = inst.filter((i) => i.status === "running").length;
+        const tools = inst.reduce((n, i) => n + (i.tools || []).length, 0);
+        const repos = (st.providers || []).reduce((n, p) => n + (p.repos || []).length, 0);
+        const iso = pstate.isolation || {};
+
+        const provs = (st.providers || []).length;
+        $("ovStats").innerHTML = [
+          stat("Платформа", st.paired ? "Привязан" : "Не привязан", st.paired ? "ok" : "warn",
+            st.middleware_url || ""),
+          stat("Репозитории", String(repos), repos ? "ok" : "",
+            provs ? plural(provs, "провайдер", "провайдера", "провайдеров") : "провайдеров нет"),
+          stat("Подключения", inst.length ? running + " / " + inst.length : "0",
+            inst.length ? (running === inst.length ? "ok" : "bad") : "",
+            !inst.length ? "ни одного не настроено" : running === inst.length ? "все работают" : "часть не запущена"),
+          stat("Инструменты", String(tools), tools ? "ok" : "",
+            tools ? "видны модели на читающих стадиях" : "модель ничего не получает"),
+        ].join("");
+
+        let banner = "";
+        if (!st.paired) {
+          banner = callout("warn", `<b>Коннектор ещё не привязан.</b>
+            Пока он не привязан, платформа его не видит и задачи к нему не приходят.
+            <div class="callout-note">Код привязки — в приложении Buff, раздел «Коннекторы».</div>`);
+        } else if (pstate.enabled && !iso.available) {
+          banner = callout("crit", `<b>Интеграции не запускаются.</b> ${esc(iso.reason || "")}
+            <div class="callout-note">Git-мост при этом работает.</div>`);
+        }
+        // A section the connector no longer reads is not an error, but the
+        // operator has to hear it from the page — otherwise their integration
+        // just goes quiet and nothing on screen says why.
+        // The connector itself. Not an error and not a nag: a line saying which
+        // version is out, where an operator already looks at their connector.
+        // Updating it is a download and a restart — their call, not ours.
+        if (st.core_latest) {
+          banner += callout("warn", `<b>Вышла новая версия коннектора: ${esc(st.core_latest)}.</b>
+            У вас ${esc(st.version || "")}.
+            <div class="callout-note">Скачать — на странице загрузки; подключения и настройки останутся на месте.</div>`);
+        }
+        banner += (st.ignored || []).map((sec) =>
+          callout("warn", `<b>Раздел <code>${esc(sec.name)}</code> в файле настроек не используется.</b>
+            ${esc(sec.note)}`)).join("");
+        $("ovBanner").innerHTML = banner;
+
+        const next = [];
+        if (!(st.providers || []).length)
+          next.push(`Добавьте провайдера в разделе <a class="ui-link" href="#/repos">Репозитории</a> — коннектору нужен доступ к вашему git.`);
+        if (!st.paired)
+          next.push(`Вставьте код привязки в разделе <a class="ui-link" href="#/link">Подключение</a>.`);
+        if (pstate.enabled && !inst.length)
+          next.push(`Выберите интеграцию в <a class="ui-link" href="#/market">Каталоге</a>, чтобы модель получила инструменты вашей системы.`);
+        if (inst.some((i) => i.status !== "running"))
+          next.push(`Разберитесь с подключением, которое не запустилось — раздел <a class="ui-link" href="#/plugins">Интеграции</a>.`);
+        $("ovNext").innerHTML = next.length
+          ? next.map((s) => `<li>${s}</li>`).join("")
+          : `<li>Всё на месте: коннектор привязан, репозитории заданы, подключения работают.</li>`;
+
+        $("pairHint").innerHTML = st.paired
+          ? `Коннектор привязан к платформе. Повторная привязка нужна, только если вы перенесли его на другую машину — новый код выдаёт приложение Buff.`
+          : `Сначала сохраните хотя бы одного провайдера или интеграцию. Затем вставьте одноразовый код из приложения Buff.`;
+
+        badge("repos", repos ? String(repos) : "");
+        badge("link", st.paired ? "" : "!");
+        badge("plugins", inst.length ? running + "/" + inst.length : "");
+      }
+
+      // Russian counts three ways, and "0 провайдер(ов)" on a security product
+      // reads as a page nobody finished.
+      function plural(n, one, few, many) {
+        const t = n % 100 > 4 && n % 100 < 21 ? many : [many, one, few, few, few][Math.min(n % 10, 4)] || many;
+        return n + " " + t;
+      }
+
+      function stat(k, v, tone, s) {
+        return `<div class="ui-stat"><div class="ui-stat__body"><div class="ui-stat__label">${esc(k)}</div>
+          <div class="ui-stat__value">${tone ? `<span class="ui-dot ui-dot--${TONES[tone]}"></span>` : ""}${esc(v)}</div>
+          <div class="ui-stat__note">${esc(s)}</div></div></div>`;
+      }
+
+      // The page's three tones in the design system's words.
+      const TONES = { ok: "ok", warn: "warn", bad: "crit" };
+
+      // The page's markup pieces, one place each: a notice, a labelled field, a checkbox row,
+      // a status badge. A field's label text is wrapped once, so inline <code> in it stays in
+      // the line instead of becoming an item of ui-label's flex row.
+      function callout(tone, html) {
+        return `<div class="ui-callout ui-callout--${tone}"><div class="ui-callout__text">${html}</div></div>`;
+      }
+      function field(label, control, hint, attrs) {
+        return `<label class="ui-field"${attrs || ""}><span class="ui-label"><span>${label}</span></span>${control}${hint ? `<span class="ui-field__hint">${hint}</span>` : ""}</label>`;
+      }
+      function checkRow(id, label, checked, attrs) {
+        return `<label class="ui-check"><input type="checkbox" class="ui-checkbox" id="${id}" ${checked ? "checked" : ""} ${attrs || ""} /><span class="ui-check__text">${label}</span></label>`;
+      }
+      function pill(tone, text, attrs) {
+        return `<span class="ui-badge ui-badge--sm ui-badge--${tone}"${attrs || ""}>${text}</span>`;
+      }
+
+      async function copyHookURL() { await copyFrom("i-hook-url", "i-hook-copied"); }
+
+      // Copies an element's text and says so beside it. One helper for the
+      // callback URL and for a source's signing token: both are pasted into the
+      // customer's system, and both are long enough that typing them is an error.
+      async function copyFrom(id, okId) {
+        const text = $(id).textContent;
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          // Older browsers, and any page not served over TLS.
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents($(id));
+          sel.removeAllRanges();
+          sel.addRange(range);
+          document.execCommand("copy");
+        }
+        $(okId).textContent = "скопировано ✓";
+      }
+
+      async function saveLink() {
+        const el = $("lstatus");
+        el.textContent = "сохраняем…"; el.className = "ui-note";
+        const r = await persist(null);
+        if (!r.ok) { el.textContent = r.error; el.className = "err"; return; }
+        el.textContent = "сохранено ✓"; el.className = "ok";
+        $("hstatus").textContent = "сохранено ✓"; $("hstatus").className = "ok";
+        await load();
+        await loadPlugins();
+      }
+
+      // ---- plugins ------------------------------------------------------
+      let pstate = { enabled: false };
+      let catalogIndex = null;
+      let editing = null; // {plugin, version, id?}
+
+      async function loadPlugins() {
+        pstate = await api("/api/plugins");
+        $("nav-plugins").hidden = !pstate.enabled;
+        $("nav-market").hidden = !pstate.enabled;
+        $("nav-mcp").hidden = !pstate.enabled;
+        if (!pstate.enabled) { renderOverview(); return; }
+        $("catalogSource").innerHTML = pstate.catalog_url
+          ? `<span title="${esc(pstate.catalog_url)}">Каталог и каждая интеграция в нём подписаны нами; подпись проверяется здесь, на вашей машине, до установки.</span>`
+          : "";
+        renderIsolation();
+        renderInstalled();
+        renderInstances();
+        renderMcp();
+        renderOverview();
+        loadCatalog();
+      }
+
+      function renderIsolation() {
+        const el = $("isolationBanner");
+        const iso = pstate.isolation || {};
+        let html = "";
+        if (!iso.available) {
+          html += callout("crit", `<b>Интеграции не будут запущены.</b> ${esc(iso.reason || "")}
+            <div class="callout-note">Изоляция интеграции требует привилегий: коннектор должен запускаться от root
+            или с CAP_SETUID. Git-мост при этом продолжает работать.</div>`);
+        }
+        if (pstate.runtime && !pstate.runtime.installed) {
+          html += callout("warn", `<b>Интеграции не на чем запускать.</b> На этой машине нет
+            Python 3.11 или новее. Поставьте его пакетным менеджером — или разверните среду рядом с
+            состоянием коннектора; порядок описан в документации, раздел «Коннектор → Установка».
+            Git-мост при этом продолжает работать.`);
+        }
+        el.innerHTML = html;
+      }
+
+      function esc(s) { return String(s == null ? "" : s).replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c])); }
+
+      async function loadCatalog() {
+        const r = await api("/api/catalog");
+        const el = $("catalogState");
+        if (!r.available) { el.textContent = r.error || "Каталог недоступен."; $("catalog").innerHTML = ""; return; }
+        catalogIndex = r.index;
+        badge("market", String(((r.index || {}).plugins || []).length));
+        el.innerHTML = r.live
+          ? `<span class="ok">Каталог получен.</span>`
+          : `<span class="err">${esc(r.error || "")}</span>`;
+        renderCatalog();
+      }
+
+      function renderCatalog() {
+        const el = $("catalog");
+        const plugins = (catalogIndex && catalogIndex.plugins) || [];
+        if (!plugins.length) { el.innerHTML = '<div class="ui-empty ui-empty--inline">В каталоге пока пусто.</div>'; return; }
+        el.innerHTML = plugins.map((p) => {
+          const vs = p.versions || [];
+          const v = vs[0] || {};
+          const tools = (v.tools || []).map((t) =>
+            `<span class="ui-badge ui-badge--sm ui-badge--${t.read_only ? "ok" : "neutral"} tool-name" title="${esc(t.summary)}${t.vision ? " Отвечает картинкой: отдаётся только модели, которая видит изображения." : ""}">${esc(t.name)}${t.read_only ? " ·только чтение" : ""}${t.vision ? " ·картинка" : ""}</span>`).join("");
+          const isInstalled = (pstate.installed || []).some((i) => i.name === p.name && i.version === v.version);
+          return `<div class="ui-card" data-item>
+            <div class="ui-card__header">
+              <h3 class="ui-card__title title-row">${esc(p.name)} ${pill("neutral", esc(v.version || ""))}
+                ${v.status ? pill("warn", esc(v.status)) : ""}</h3>
+              <p class="ui-card__description">${esc(p.summary || "")} · издатель ${esc(p.publisher || "")}${p.category ? " · " + esc(p.category) : ""}</p>
+            </div>
+            <div class="ui-card__content stack">
+            <div class="tools">${tools}</div>
+            <div class="ui-callout ui-callout--info"><div class="ui-callout__text">
+              При установке интеграция получит:
+              <ul class="bullets">
+                <li>доступ наружу — ${v.web
+                  ? `<b>в публичный интернет</b> по адресам, которые называет модель, в пределах ваших белого и чёрного списков; внутренняя сеть закрыта всегда${(v.egress_from || []).length ? `; плюс <span title="поля настройки: ${esc(v.egress_from.join(", "))}">адреса из настройки подключения</span>` : ""}`
+                  : (v.egress_from || []).length
+                    ? `<span title="поля настройки: ${esc(v.egress_from.join(", "))}">только к адресам, которые вы укажете в настройке подключения</span>`
+                    : "<b>нет</b>"}</li>
+                <li>учётные данные — ${(v.credentials || []).length
+                  ? `<span title="${esc(v.credentials.join(", "))}">вводятся при настройке</span>${(v.handed || []).length
+                    ? (v.credentials.length > v.handed.length
+                      ? "; часть из них получает сама интеграция — её протокол коннектор подставить не может, остальные остаются в коннекторе"
+                      : " и передаются самой интеграции — её протокол коннектор подставить не может")
+                    : " и остаются в коннекторе"}`
+                  : "<b>не требуются</b>"}</li>
+                ${(v.network || []).length ? `<li>свои соединения — ${v.network.map((n) => `<b>${esc(n.protocol.toUpperCase())}</b> <span title="поле настройки: ${esc(n.hosts_from)}">к адресам из настройки</span>, порт ${esc((n.ports || []).join(", "))}`).join("; ")} (открывает сама интеграция; коннектор их не ограничивает)</li>` : ""}
+                <li>события от источника — <b>${esc(WEBHOOK_NAMES[v.webhook] || v.webhook || "не принимает")}</b></li>
+                <li>инструменты для модели — <b>${(v.tools || []).length}</b>, из них только для чтения: <b>${(v.tools || []).filter((t) => t.read_only).length}</b></li>
+              </ul>
+            </div></div>
+            </div>
+            <div class="ui-card__footer actions actions--end">
+              ${isInstalled
+                ? pill("ok", "установлен")
+                : `<button class="ui-btn ui-btn--primary ui-btn--md" onclick="installPlugin('${esc(p.name)}','${esc(v.version)}')">Установить</button>`}
+            </div>
+          </div>`;
+        }).join("");
+      }
+
+      async function installPlugin(name, version) {
+        $("catalogState").innerHTML = "Установка " + esc(name) + " " + esc(version) + "…";
+        const r = await api("/api/plugins/install", { name, version });
+        if (!r.ok) { $("catalogState").innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
+        $("catalogState").innerHTML = `<span class="ok">Установлен ${esc(r.name)} ${esc(r.version)} (${esc(r.digest)}).</span>
+          Код лежит на машине, но ещё ни к чему не подключён — <a class="ui-link" href="#/plugins">добавьте подключение</a>.`;
+        await loadPlugins();
+      }
+
+      function renderInstalled() {
+        const el = $("installed");
+        const list = pstate.installed || [];
+        if (!list.length) { el.innerHTML = '<div class="ui-empty ui-empty--inline">Пока ничего не установлено.</div>'; return; }
+        el.innerHTML = list.map((p) => `<div class="ui-card" data-item>
+          <div class="ui-card__header">
+            <h3 class="ui-card__title title-row">${esc(p.name)} ${pill("neutral", esc(p.version))}</h3>
+            <p class="ui-card__description" title="подпись ${esc(p.digest)} · host API ${p.host_api}">${esc(p.summary || "")}</p>
+          </div>
+          <div class="ui-card__footer actions actions--end"><button class="ui-btn ui-btn--outline ui-btn--sm" onclick="newInstance('${esc(p.name)}','${esc(p.version)}')">Добавить подключение</button></div>
+        </div>`).join("");
+      }
+
+      function renderInstances() {
+        const el = $("instances");
+        const list = pstate.instances || [];
+        if (!list.length) { el.innerHTML = '<div class="ui-empty ui-empty--inline">Пока нет подключений.</div>'; return; }
+        el.innerHTML = list.map((i) => instanceCard(i, "")).join("");
+      }
+
+      // One card for a connection, wherever it is listed. The tools of a
+      // catalogue plugin are chips; the tools of a server the operator brought
+      // are checkboxes, because there the operator decides what only reads —
+      // the server's own claim is shown as a hint and nothing more.
+      function instanceCard(i, suffix) {
+        const cls = i.status === "running" ? "ok" : (i.status === "failed" || i.status === "no-isolation" ? "crit" : "warn");
+        const egress = [...new Set(i.egress || [])];
+        const ro = i.read_only_tools || [];
+        const hint = i.read_only_hint || [];
+        const vision = i.vision_tools || [];
+        const tools = (i.tools || []).map((t) => i.custom
+          ? `<label class="ui-badge ui-badge--${ro.includes(t) ? "ok" : "neutral"} tool-mark"><input type="checkbox" class="ui-checkbox" data-mark="${esc(i.id)}${suffix}" value="${esc(t)}" ${ro.includes(t) ? "checked" : ""} /><span class="tool-name">${esc(t)}</span>${hint.includes(t) ? `<span class="ui-hint" title="Сервер объявляет этот инструмент только читающим. Это его слова, а не проверенный факт.">сервер: чтение</span>` : ""}</label>`
+          : `<span class="ui-badge ui-badge--sm ui-badge--${ro.includes(t) ? "ok" : "neutral"} tool-name"${vision.includes(t) ? ' title="Отвечает картинкой: отдаётся только модели, которая видит изображения."' : ""}>${esc(t)}${vision.includes(t) ? " ·картинка" : ""}</span>`).join("");
+        const custom = i.custom
+          ? `<span class="ui-badge ui-badge--sm ui-badge--warn tip" tabindex="0" data-tip="Сервер, который вы принесли сами: его код не проверялся, обращения в сеть не ограничиваются. Прогоны платформы получают только инструменты, отмеченные здесь как читающие; разработчики в Buff Code — все, с записью в журнал.">пользовательское</span>`
+          : "";
+        return `<div class="ui-card" data-item>
+          <div class="ui-card__header">
+            <h3 class="ui-card__title title-row">${esc(i.alias || i.slug)} ${pill(cls, esc(STATUS_NAMES[i.status] || i.status), ` title="${esc(i.status)}"`)}${custom}${i.ai_notes_unbounded
+              ? `<span class="ui-badge ui-badge--sm ui-badge--warn tip" tabindex="0" data-tip="Ограничение длины пояснений для ИИ снято. Весь текст попадает в промпт модели в каждом прогоне с этим подключением; избыточный текст ухудшает её работу и увеличивает стоимость. Снять — в настройках подключения.">⚠ пояснения без лимита</span>`
+              : ""}</h3>
+            <p class="ui-card__description" title="идентификатор ${esc(i.id)} · имя в инструментах модели: ${esc(i.slug)}">${esc(i.plugin)} ${esc(i.version)}${i.latest ? ` ${pill("warn", `есть ${esc(i.latest)}`, ' title="Опубликована более новая версия. Обновление — ваше решение: подключение не меняется само."')}` : ""} ${i.dev_project ? " · проект " + esc(i.dev_project) : ""}${i.custom ? " · " + esc(SOURCE_NAMES[i.source] || i.source) : ""}</p>
+            ${egress.length ? `<p class="ui-card__description">${i.custom ? "адрес" : "ходит только к"}: ${esc(egress.join(", "))}</p>` : ""}
+          </div>
+          <div class="ui-card__content stack">
+            ${i.last_error ? `<p class="err">${esc(i.last_error)}</p>` : ""}
+            ${tools ? `<div class="tools">${tools}</div>` : ""}
+            ${i.custom && (i.tools || []).length ? `<div class="actions">
+              <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="saveMarks('${esc(i.id)}','${suffix}')">Сохранить отметки чтения</button>
+              ${hint.length ? `<button class="ui-btn ui-btn--outline ui-btn--sm" onclick="marksFromHint('${esc(i.id)}','${suffix}')">Отметить как предлагает сервер</button>` : ""}
+              <span class="ui-note">Без отметки инструмент модели не достаётся.</span></div>` : ""}
+          </div>
+          <div class="ui-card__footer actions actions--end">
+            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="checkInstance('${esc(i.id)}','${suffix}')">Проверить связь</button>
+            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="showLog('${esc(i.id)}','${suffix}')">Журнал</button>
+            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="editInstance('${esc(i.id)}')">Настроить</button>
+            ${i.latest ? `<button class="ui-btn ui-btn--outline ui-btn--sm" onclick="installAndUpgrade('${esc(i.id)}','${esc(i.plugin)}','${esc(i.latest)}')">Обновить до ${esc(i.latest)}</button>` : ""}
+            <button class="ui-btn ui-btn--danger ui-btn--sm" onclick="deleteInstance('${esc(i.id)}')">Удалить</button>
+          </div>
+          <div class="ui-card__content stack">
+            <div id="chk-${esc(i.id)}${suffix}" class="ui-note"></div>
+            <div id="log-${esc(i.id)}${suffix}"></div>
+          </div>
+        </div>`;
+      }
+
+      const SOURCE_NAMES = { archive: "из архива", github: "из GitHub", url: "удалённый сервер", command: "своя команда" };
+
+      async function saveMarks(id, suffix) {
+        const read_only = [...document.querySelectorAll(`input[data-mark="${id}${suffix}"]:checked`)].map((c) => c.value);
+        const r = await api("/api/mcp/marks", { id, read_only });
+        if (!r.ok) { alert(r.error); return; }
+        await load();
+        await loadPlugins();
+      }
+      function marksFromHint(id, suffix) {
+        const i = (pstate.instances || []).find((x) => x.id === id) || {};
+        const hint = i.read_only_hint || [];
+        for (const box of document.querySelectorAll(`input[data-mark="${id}${suffix}"]`)) box.checked = hint.includes(box.value);
+      }
+
+      // ---- custom MCP servers (#351) -----------------------------------
+      let mcpDraft = null; // what the operator is about to save
+
+      function renderMcp() {
+        const tc = pstate.toolchain || {};
+        const have = [tc.node ? "Node.js" : "", tc.python ? "Python" : "", tc.uvx ? "uv" : ""].filter(Boolean);
+        const lack = [tc.node ? "" : "Node.js", tc.python ? "" : "Python"].filter(Boolean);
+        $("mcpToolchain").innerHTML = (have.length ? `На этой машине есть ${have.join(", ")}` : "На этой машине нет ни Node.js, ни Python") +
+          (lack.length ? ` — серверу на ${lack.join(" или ")} понадобится установка пакетным менеджером системы, туда, где его увидит пользователь подключения.` : ".");
+        const list = (pstate.instances || []).filter((i) => i.custom);
+        badge("mcp", list.length ? String(list.length) : "");
+        $("mcpList").innerHTML = list.length ? list.map((i) => instanceCard(i, "-mcp")).join("") : '<div class="ui-empty ui-empty--inline">Пока нет.</div>';
+      }
+
+      (function dropZone() {
+        const zone = $("mcpDrop");
+        const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+        zone.addEventListener("dragover", (e) => { stop(e); zone.classList.add("over"); });
+        zone.addEventListener("dragleave", (e) => { stop(e); zone.classList.remove("over"); });
+        zone.addEventListener("drop", (e) => {
+          stop(e);
+          zone.classList.remove("over");
+          const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+          if (file) mcpUpload(file);
+        });
+      })();
+
+      async function mcpUpload(file) {
+        if (!file) return;
+        const status = $("mcpStatus");
+        status.innerHTML = `Распаковываем <b>${esc(file.name)}</b> и ставим зависимости — это может занять несколько минут…`;
+        const form = new FormData();
+        form.append("archive", file, file.name);
+        let r;
+        try {
+          const res = await fetch("/api/mcp/upload", { method: "POST", headers: { "X-Buff-Local": "1" }, body: form });
+          r = await res.json();
+        } catch (e) {
+          status.innerHTML = `<span class="err">${esc(String(e))}</span>`;
+          return;
+        }
+        $("mcpFile").value = "";
+        mcpPrepared(r);
+      }
+
+      async function mcpGithub() {
+        const status = $("mcpStatus");
+        status.innerHTML = `Скачиваем <b>${esc($("mcpRepo").value)}</b> и ставим зависимости — это может занять несколько минут…`;
+        const r = await api("/api/mcp/github", { url: $("mcpRepo").value.trim(), token: $("mcpRepoToken").value });
+        mcpPrepared(r);
+      }
+
+      function mcpPrepared(r) {
+        const status = $("mcpStatus");
+        if (!r.ok) { status.innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
+        status.innerHTML = r.draft.needs
+          ? `<span class="err">${esc(r.draft.needs)}</span>`
+          : `<span class="ok">Готово: ${esc(r.draft.launch.name || r.draft.origin)}${r.draft.launch.version ? " " + esc(r.draft.launch.version) : ""}.</span> Проверьте, что будет запущено, и сохраните.`;
+        renderMcpForm(r.draft, {});
+      }
+
+      function mcpRemote() {
+        const url = $("mcpUrl").value.trim();
+        if (!url) { $("mcpStatus").innerHTML = `<span class="err">Укажите адрес сервера.</span>`; return; }
+        $("mcpStatus").textContent = "";
+        renderMcpForm({ id: "", source: "url", origin: url, launch: { url, fields: [] } }, {});
+      }
+
+      // The form for a server of the operator's own — a draft just prepared,
+      // or a saved one being edited. What will run is shown in full and is
+      // editable: the packaging's word is a starting point, the operator's
+      // word is what runs.
+      function renderMcpForm(d, cfg) {
+        mcpDraft = d;
+        // A fresh draft carries nothing over from a server edited before it.
+        if (!cfg.id) mcpEditing = null;
+        const l = d.launch || {};
+        const remote = d.source === "url";
+        const fields = (l.fields || []).map((f) => {
+          const label = esc(f.title || f.key) + (f.required ? " *" : "");
+          const desc = f.description ? esc(f.description) : "";
+          if (f.sensitive) {
+            const keep = cfg.id && (cfg.credential_kinds || {})[f.key] ? "оставьте пустым, чтобы не менять" : "";
+            return field(label, `<input id="mf-${esc(f.key)}" class="ui-input" type="password" autocomplete="off" placeholder="${keep}" />`, desc);
+          }
+          const val = (cfg.config || {})[f.key] ?? f.default ?? "";
+          if (f.type === "boolean") return checkRow(`mf-${esc(f.key)}`, `<span>${label}</span>${desc ? `<span class="ui-hint">${desc}</span>` : ""}`, val === true || val === "true");
+          const t = f.type === "number" ? "number" : "text";
+          return field(label, `<input id="mf-${esc(f.key)}" class="ui-input" type="${t}" value="${esc(val)}" />`, desc);
+        }).join("");
+        const run = remote
+          ? field("Адрес сервера", `<input id="m-url" class="ui-input" value="${esc(l.url || "")}" placeholder="https://mcp.example.com/mcp" />`) +
+            field("Заголовок Authorization — если сервер его требует",
+              `<input id="m-auth" class="ui-input" type="password" autocomplete="off" placeholder="${cfg.id && (cfg.credential_kinds || {}).authorization ? "оставьте пустым, чтобы не менять" : "Bearer …"}" />`,
+              "Хранится в каталоге секретов коннектора и отправляется с каждым запросом.")
+          : field("Команда", `<input id="m-cmd" class="ui-input" value="${esc(l.command || "")}" placeholder="node" />`,
+              "Слова упаковки <code>node</code>, <code>npx</code>, <code>python</code>, <code>uvx</code> коннектор подставит с этой машины.") +
+            field("Аргументы — по одному в строке", `<textarea id="m-args" class="ui-textarea" rows="3">${esc((l.args || []).join("\n"))}</textarea>`,
+              "<code>${__dirname}</code> — каталог с кодом сервера, <code>${user_config.имя}</code> — значение настройки ниже.") +
+            field("Переменные окружения — <code>ИМЯ=значение</code>, по одной в строке",
+              `<textarea id="m-env" class="ui-textarea" rows="3">${esc(Object.entries(l.env || {}).map(([k, v]) => k + "=" + v).join("\n"))}</textarea>`) +
+            field("Секреты в окружении — <code>ИМЯ=значение</code>, по одному в строке",
+              `<textarea id="m-secrets" class="ui-textarea" rows="2" placeholder="${cfg.id ? "уже сохранённые остаются; здесь — новые или изменённые" : "например API_TOKEN=…"}"></textarea>`,
+              "Попадут серверу как переменные окружения, а в файле настроек останется только ссылка на секрет.");
+        const needs = d.needs ? callout("crit", esc(d.needs)) : "";
+        const log = d.log ? `<details><summary class="ui-note">Журнал установки зависимостей</summary><pre class="ui-code-block log">${esc(d.log)}</pre></details>` : "";
+        const tools = (l.tools || []).length ? `<p class="ui-note">Упаковка обещает инструменты: ${esc(l.tools.join(", "))}. Что из этого читающее — отметите после запуска.</p>` : "";
+        $("mcpForm").innerHTML = `<div class="ui-card" data-item>
+          <div class="ui-card__header">
+            <h3 class="ui-card__title title-row">${cfg.id ? "Настройка своего сервера" : "Новый сервер"} — ${esc(l.name || d.origin || "")}${l.version ? " " + esc(l.version) : ""}
+              ${pill("warn", "пользовательское")}</h3>
+            <p class="ui-card__description">${esc(SOURCE_NAMES[d.source] || d.source)}${d.origin ? ": " + esc(d.origin) : ""}${l.runtime ? " · " + esc(l.runtime) : ""}</p>
+          </div>
+          <div class="ui-card__content stack">
+            ${needs}
+            <div class="grid">
+              ${field("Название", `<input id="m-alias" class="ui-input" value="${esc(cfg.alias || l.name || "")}" placeholder="Погода" />`)}
+              ${field("Проект разработки", `<input id="m-dev" class="ui-input" value="${esc(cfg.dev_project || "")}" placeholder="backend" />`,
+                "Название проекта внутри вашей организации, без организации и без косой черты.")}
+            </div>
+            <h3 class="ui-title group-title">${remote ? "Куда подключаемся" : "Что будет запущено"}</h3>
+            ${run}
+            ${fields ? `<h3 class="ui-title group-title">Настройки сервера</h3>${fields}` : ""}
+            ${tools}
+            ${notesSection(cfg)}
+            ${log}
+            ${callout("info", checkRow("m-accept", `<span>Я понимаю, что код этого сервера не проверялся Buff, что его обращения в сеть коннектор не
+                ограничивает, и что он будет работать на этой машине под отдельным пользователем ОС. Модель
+                получит только те инструменты, которые я отмечу как читающие.</span>`, cfg.id))}
+          </div>
+          <div class="ui-card__footer actions actions--end">
+            <button class="ui-btn ui-btn--primary ui-btn--md" onclick="saveMcp()">Сохранить</button>
+            <button class="ui-btn ui-btn--outline ui-btn--md" onclick="document.getElementById('mcpForm').innerHTML=''">Отмена</button>
+          </div>
+          <div class="ui-card__content"><div id="m-status" class="ui-note"></div></div>
+        </div>`;
+        notesCount();
+        show("mcp");
+        $("mcpForm").scrollIntoView({ block: "start" });
+      }
+
+      function linesToPairs(text) {
+        const out = {};
+        for (const line of text.split("\n")) {
+          const s = line.trim();
+          if (!s) continue;
+          const eq = s.indexOf("=");
+          if (eq <= 0) continue;
+          out[s.slice(0, eq).trim()] = s.slice(eq + 1);
+        }
+        return out;
+      }
+
+      async function saveMcp() {
+        const d = mcpDraft;
+        const l = d.launch || {};
+        const remote = d.source === "url";
+        const status = $("m-status");
+        if (!$("m-accept").checked) { status.innerHTML = `<span class="err">Без согласия сервер не будет сохранён.</span>`; return; }
+        const config = {};
+        const credentials = {};
+        for (const f of l.fields || []) {
+          const node = $("mf-" + f.key);
+          if (!node) continue;
+          if (f.sensitive) { credentials[f.key] = { kind: "secret", value: node.value }; continue; }
+          if (f.type === "boolean") config[f.key] = node.checked;
+          else if (node.value !== "") config[f.key] = f.type === "number" ? Number(node.value) : node.value;
+        }
+        if (remote) {
+          credentials.authorization = { kind: "header", value: $("m-auth").value };
+        } else {
+          for (const [k, v] of Object.entries(linesToPairs($("m-secrets").value))) credentials[k] = { kind: "env", value: v };
+          // Secrets already on file stay unless retyped: send them blank.
+          for (const [k, kind] of Object.entries((mcpEditing && mcpEditing.credential_kinds) || {}))
+            if (!(k in credentials)) credentials[k] = { kind, value: "" };
+        }
+        const r = await api("/api/mcp/save", {
+          id: d.id || "", source: d.source, origin: d.origin || "", name: l.name || "", version: l.version || "",
+          command: remote ? "" : $("m-cmd").value, args: remote ? [] : $("m-args").value.split("\n").map((s) => s.trim()).filter(Boolean),
+          env: remote ? {} : linesToPairs($("m-env").value), url: remote ? $("m-url").value.trim() : "",
+          alias: $("m-alias").value, dev_project: $("m-dev").value, config, credentials,
+          read_only: (mcpEditing && mcpEditing.read_only) || [], accepted: true,
+          ai_notes: $("i-notes").value, ai_notes_unbounded: $("i-notes-unbounded").checked,
+        });
+        if (!r.ok) { status.innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
+        $("mcpForm").innerHTML = "";
+        mcpEditing = null;
+        await load();
+        await loadPlugins();
+        show("mcp");
+      }
+      let mcpEditing = null;
+
+
+      // The catalogue offers a version this machine does not have yet: install it
+      // first, then move the connection. Still one act by the operator — nothing
+      // happens because we published something.
+      async function installAndUpgrade(id, plugin, version) {
+        const r = await api("/api/plugins/install", { name: plugin, version });
+        if (!r.ok && r.error) { alert(r.error); return; }
+        await upgradeInstance(id, version);
+      }
+
+      async function upgradeInstance(id, version) {
+        const r = await api("/api/instances/upgrade", { id, version });
+        if (!r.ok) { alert(r.error); return; }
+        await load();
+        await loadPlugins();
+      }
+
+      // The hint follows the element it belongs to; one node for the whole
+      // page, shown on hover and on keyboard focus alike.
+      (function tooltip() {
+        const tip = $("tooltip");
+        const show = (e) => {
+          const el = e.target.closest && e.target.closest("[data-tip]");
+          if (!el) return;
+          tip.textContent = el.getAttribute("data-tip");
+          tip.hidden = false;
+          const r = el.getBoundingClientRect();
+          const w = tip.offsetWidth;
+          let left = r.left + r.width / 2 - w / 2;
+          left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+          tip.style.left = left + "px";
+          tip.style.top = (r.bottom + 8) + "px";
+        };
+        const hide = () => { tip.hidden = true; };
+        document.addEventListener("mouseover", show);
+        document.addEventListener("mouseout", (e) => { if (e.target.closest && e.target.closest("[data-tip]")) hide(); });
+        document.addEventListener("focusin", show);
+        document.addEventListener("focusout", hide);
+      })();
+
+      function manifestOf(name, version) {
+        return (pstate.installed || []).find((p) => p.name === name && p.version === version);
+      }
+
+      function newInstance(plugin, version) { editing = { plugin, version }; renderInstanceForm({}); }
+
+      function editInstance(id) {
+        const cfg = (pstate.config || []).find((c) => c.id === id) || {};
+        if (cfg.mcp) {
+          const m = cfg.mcp;
+          mcpEditing = { credential_kinds: cfg.credential_kinds || {}, read_only: m.read_only || [] };
+          renderMcpForm({ id, source: m.source, origin: m.origin, launch: { name: m.name, version: m.version,
+            command: m.command, args: m.args || [], env: m.env || {}, url: m.url, fields: m.fields || [] } }, cfg);
+          return;
+        }
+        editing = { plugin: cfg.plugin, version: cfg.version, id };
+        renderInstanceForm(cfg);
+      }
+
+      // The form is GENERATED from the plugin's own schema: no plugin-specific
+      // code lives in this page, which is what makes a new integration a bundle
+      // rather than a connector release.
+      // The property names as the manifest wrote them; a schema from an older
+      // connector carries no order and falls back to the map's.
+      function fieldOrder(schema) {
+        const props = schema.properties || {};
+        const order = (schema.order || []).filter((k) => k in props);
+        return order.concat(Object.keys(props).filter((k) => !order.includes(k)));
+      }
+
+      function renderInstanceForm(cfg) {
+        const man = manifestOf(editing.plugin, editing.version);
+        const el = $("instanceForm");
+        if (!man) { el.innerHTML = '<p class="err">Интеграция не установлена.</p>'; return; }
+        const schema = man.schema || { properties: {} };
+        const props = schema.properties || {};
+        const required = schema.required || [];
+        // In the order the manifest wrote them, not the alphabet's.
+        const fields = fieldOrder(schema).map((key) => {
+          const p = props[key];
+          // An untouched field means its default: the form shows the value the
+          // connector will use, not an empty box that means the same thing.
+          const val = (cfg.config || {})[key] ?? p.default;
+          const label = esc(p.title || key) + (required.includes(key) ? " *" : "");
+          if (p.type === "array") {
+            return field(label, `<input id="f-${esc(key)}" class="ui-input" value="${esc((val || []).join(", "))}" placeholder="через запятую" />`);
+          }
+          if (p.type === "boolean") {
+            return checkRow(`f-${esc(key)}`, label, val);
+          }
+          // A setting with a fixed set of values is chosen, not typed: an
+          // operator should not have to guess how an engine is spelled.
+          if (Array.isArray(p.enum) && p.enum.length) {
+            const options = p.enum.map((v) =>
+              `<option value="${esc(v)}" ${String(val ?? "") === String(v) ? "selected" : ""}>${esc(v)}</option>`).join("");
+            return field(label, `<span class="ui-select"><select id="f-${esc(key)}">${options}</select></span>`);
+          }
+          const t = p.type === "integer" || p.type === "number" ? "number" : "text";
+          return field(label, `<input id="f-${esc(key)}" class="ui-input" type="${t}" value="${esc(val == null ? "" : val)}" />`);
+        }).join("");
+        // How often THIS connection is read is the operator's call: the plugin
+        // only suggests, and the placeholder shows what leaving it empty means.
+        const suggested = man.poll_seconds || 20;
+        const poll = `<h3 class="ui-title group-title">События</h3>
+             <p class="ui-note">Опрос работает всегда и не требует открытых портов: коннектор сам читает источник
+             этого подключения. Интеграция без событий (например, «Интернет») опрос не использует.</p>
+             ${field("Интервал опроса, секунд",
+               `<input id="i-poll" class="ui-input" type="number" min="1" step="1" value="${cfg.poll_seconds ? esc(cfg.poll_seconds) : ""}"
+                 placeholder="${esc(suggested)}" />`,
+               `Пусто — ${man.poll_seconds ? "как предлагает интеграция" : "по умолчанию"}: раз в ${esc(suggested)} с.
+               Чем чаще, тем больше запросов к источнику — у него могут быть свои лимиты.`)}`;
+        // Only a plugin whose manifest says it can be woken gets a listener: an
+        // open port for a plugin that ignores callbacks is an open port for
+        // nothing.
+        const hooks = poll + ((man.webhook && man.webhook !== "none" && man.webhook !== "нет")
+          ? `<p class="ui-note">Вебхук — ускорение поверх опроса:
+             ${man.webhook === "deliver"
+               ? "трекер сообщает о событии сразу. Вызов принимает сам коннектор: проверяет секрет и подпись и только потом передаёт событие интеграции — своих портов она не открывает."
+               : "трекер сообщает «есть новое», и коннектор проверяет источник сразу, не дожидаясь следующего опроса."}</p>
+             ${checkRow("i-hook", "Принимать вебхуки для этого подключения", cfg.webhook)}
+             ${pstate.webhooks && pstate.webhooks.listen
+                ? (cfg.webhook_url
+                    ? `<div class="stack stack--tight">
+                         <p class="ui-note">Ссылка для трекера — её выдаёт коннектор:</p>
+                         <div class="ui-panel ui-panel--inset hookurl"><code id="i-hook-url">${esc(cfg.webhook_url)}</code>
+                           <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="copyHookURL()">Скопировать</button></div>
+                         <span id="i-hook-copied" class="ok"></span>
+                       </div>`
+                    : `<p class="ui-note">Ссылка появится после сохранения.</p>`)
+                : `<p class="ui-note">Приёмник выключен для всего коннектора — включите его в разделе
+                   <a class="ui-link" href="#/link">Подключение</a>.</p>`}
+             ${signing(man, cfg)}`
+          : "");
+        // A tracker that authenticates with basic auth needs the account the
+        // token belongs to — Jira Cloud takes an email and an API token, and a
+        // token on its own is a 401 that reads like a wrong token.
+        const creds = (man.credentials || []).map((c) => credentialSection(c, cfg)).join("");
+        el.innerHTML = `<div class="ui-card" data-item>
+          <div class="ui-card__header">
+            <h3 class="ui-card__title">${cfg.id ? "Настройка подключения" : "Новое подключение"} — ${esc(editing.plugin)} ${esc(editing.version)}</h3>
+          </div>
+          <div class="ui-card__content stack">
+            <div class="grid">
+              ${field("Название", `<input id="i-alias" class="ui-input" value="${esc(cfg.alias || "")}" placeholder="Jira прод" />`)}
+              ${field("Проект разработки", `<input id="i-dev" class="ui-input" value="${esc(cfg.dev_project || "")}" placeholder="backend" />`,
+                "Название проекта внутри вашей организации, без организации и без косой черты.")}
+            </div>
+            ${fields}
+            ${creds}
+            ${notesSection(cfg)}
+            ${askersSection(cfg)}
+            ${hooks}
+          </div>
+          <div class="ui-card__footer actions actions--end">
+            <button class="ui-btn ui-btn--primary ui-btn--md" onclick="saveInstance()">Сохранить</button>
+            <button class="ui-btn ui-btn--outline ui-btn--md" onclick="document.getElementById('instanceForm').innerHTML=''">Отмена</button>
+          </div>
+          <div class="ui-card__content"><div id="i-status" class="ui-note"></div></div>
+        </div>`;
+        notesCount();
+      }
+
+      // What the operator tells the MODEL about this connection. Bounded by
+      // default: a long text in the prompt costs the model accuracy, so the
+      // bound is lifted only through the dialog, and the card stays as long as
+      // the bound is lifted — the risk does not go away after the click.
+      const NOTES_LIMIT = 2048;
+      function notesSection(cfg) {
+        const unbounded = !!cfg.ai_notes_unbounded;
+        return `<h3 class="ui-title group-title">Пояснения для ИИ</h3>
+          <p class="ui-note">Свободный текст о том, что модели стоит знать про эту систему: какой проект чем
+            занимается, как у вас называют вещи, куда смотреть в первую очередь. Передаётся модели вместе с
+            описанием инструментов подключения.</p>
+          ${field("Пояснения", `<textarea id="i-notes" class="ui-textarea" oninput="notesCount()" placeholder="Например: проект PROJ — биллинг, OPS — эксплуатация. Задачи с меткой legacy не трогать.">${esc(cfg.ai_notes || "")}</textarea>
+            <span class="counter ui-hint"><span id="i-notes-count"></span><span id="i-notes-bound"></span></span>`)}
+          ${checkRow("i-notes-unbounded", "Без ограничения длины", unbounded, `onchange="notesUnboundedToggle(this)"`)}
+          <div id="i-notes-risk">${notesRiskCard(unbounded)}</div>`;
+      }
+      // Who may ask the bot from a comment in the customer's own system
+      // (cloud-front#476). The rules are the connector's to check; the box is
+      // the platform's, because only it knows the members and the domains its
+      // single sign-on vouches for.
+      function askersSection(cfg) {
+        return `<h3 class="ui-title group-title">Кто может спрашивать бота</h3>
+          <p class="ui-note">Для вопросов из комментариев в самой системе — в тикете, под страницей, в документе.
+            По правилу на строку: логин (<code>petrov</code>), адрес (<code>petrov@company.ru</code>),
+            домен (<code>@company.ru</code>) или регулярное выражение (<code>/^dev-.+@company\\.ru$/</code>).
+            Пусто и галочка снята — спрашивать могут все. Остальным бот отвечает, что спросить можно в приложении Buff,
+            и ничего не запускает.</p>
+          ${field("Правила", `<textarea id="i-askers" class="ui-textarea" rows="3" placeholder="@company.ru">${esc((cfg.askers || []).join("\n"))}</textarea>`)}
+          ${checkRow("i-askers-members", "Участники организации Buff — по адресу почты; при едином входе — любой адрес на подтверждённых доменах", cfg.askers_members)}
+          <p class="ui-note">Логин и адрес берутся из самой системы, и показывают их не все. У Jira Cloud, Confluence Cloud,
+            Notion и Google Диска логина нет — только адрес, если человек его не скрыл; GitHub, GitLab и Gitea показывают адрес,
+            только если он открыт в профиле; Redmine — только токену администратора; у Bitbucket Cloud адреса нет. Figma не показывает ни того, ни другого:
+            при заданных правилах спросить из неё не сможет никто.</p>`;
+      }
+      function notesRiskCard(unbounded) {
+        return unbounded
+          ? callout("warn", `<b>Ограничение длины снято.</b> Весь текст пояснений попадает в
+               промпт модели в каждом прогоне с этим подключением. Избыточный текст ухудшает следование инструкциям и
+               увеличивает стоимость. Вы приняли этот риск; чтобы вернуть защиту, снимите галочку.`)
+          : "";
+      }
+      function notesCount() {
+        const node = $("i-notes");
+        if (!node) return;
+        const n = [...node.value].length;
+        const unbounded = $("i-notes-unbounded").checked;
+        const over = !unbounded && n > NOTES_LIMIT;
+        $("i-notes-count").textContent = plural(n, "символ", "символа", "символов");
+        $("i-notes-bound").textContent = unbounded ? "без ограничения длины" : `не больше ${NOTES_LIMIT} символов`;
+        $("i-notes-count").parentElement.classList.toggle("over", over);
+        node.setAttribute("aria-invalid", over ? "true" : "false");
+      }
+      let notesRiskResolve = null;
+      function notesUnboundedToggle(box) {
+        if (!box.checked) { $("i-notes-risk").innerHTML = ""; notesCount(); return; }
+        // Checked means "show me the warning", not "accepted": the box stays
+        // on only if the operator says so in the dialog.
+        box.checked = false;
+        notesRiskResolve = (accepted) => {
+          box.checked = accepted;
+          $("i-notes-risk").innerHTML = notesRiskCard(accepted);
+          notesCount();
+        };
+        $("notesRisk").showModal();
+      }
+      function notesRiskAnswer(accepted) {
+        $("notesRisk").close();
+        if (notesRiskResolve) notesRiskResolve(accepted);
+        notesRiskResolve = null;
+      }
+
+      // What the page calls a connection's state and a plugin's webhook mode —
+      // in words, not in the identifiers the API carries (cloud-front#475).
+      const STATUS_NAMES = {
+        running: "работает", starting: "запускается", stopped: "остановлено", failed: "ошибка",
+        backoff: "перезапуск после сбоя", "no-isolation": "нет изоляции",
+      };
+      const WEBHOOK_NAMES = {
+        none: "не принимает", deliver: "принимает по ссылке с секретом",
+        wake: "принимает сигнал «есть новое» по ссылке с секретом",
+      };
+      // The field a secret of that kind is typed into.
+      const SECRET_NAMES = { bearer: "Токен", basic: "Токен", header: "Ключ API" };
+      const KIND_NAMES = {
+        bearer: "токен", basic: "учётная запись и токен", header: "ключ API",
+        service_account: "сервисный аккаунт (JSON-ключ)", oauth2: "вход через свою учётную запись (OAuth)",
+        password: "учётная запись и пароль (передаются интеграции)",
+      };
+
+      // One credential of the plugin: which KIND it is, when the plugin offers
+      // several (a Google connection signs in as a service account or as a
+      // person), and the inputs that kind takes. The kind is chosen once; a
+      // sign-in belongs to an already saved connection, because the return
+      // from the source has to land on a credential that exists.
+      function credentialSection(c, cfg) {
+        const kinds = c.kinds || [];
+        const current = (cfg.credential_kinds || {})[c.name] || kinds[0] || "bearer";
+        const chooser = kinds.length > 1
+          ? field("Способ входа", `<span class="ui-select"><select id="cred-kind-${esc(c.name)}" onchange="renderCredInputs(${esc(JSON.stringify(c.name))})">
+                 ${kinds.map((k) => `<option value="${esc(k)}" ${k === current ? "selected" : ""}>${esc(KIND_NAMES[k] || k)}</option>`).join("")}
+               </select></span>`, "", ` title="${esc(c.name)}"`)
+          : "";
+        credForms[c.name] = { c, cfg };
+        return `${chooser}<div id="cred-box-${esc(c.name)}" class="stack">${credInputs(c, cfg, current)}</div>`;
+      }
+      const credForms = {};
+      function renderCredInputs(name) {
+        const { c, cfg } = credForms[name];
+        $("cred-box-" + name).innerHTML = credInputs(c, cfg, $("cred-kind-" + name).value);
+      }
+      // Where a sign-in that landed in a browser on another machine is finished by hand.
+      function oauthPaste(cfg, c) {
+        const n = esc(c.name);
+        return field("Если браузер не на этой машине — вставьте сюда адрес страницы, на которую вернул источник",
+          `<input id="oauth-paste-${n}" class="ui-input" type="text" autocomplete="off" placeholder="http://127.0.0.1:…/oauth/callback?state=…&amp;code=…" />
+           <span><button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="oauthFinish(${esc(JSON.stringify(cfg.id))}, ${esc(JSON.stringify(c.name))})">Завершить вход</button></span>`);
+      }
+      function credInputs(c, cfg, kind) {
+        const n = esc(c.name);
+        const saved = cfg.id && (cfg.credential_kinds || {})[c.name] === kind;
+        const keep = saved ? "оставьте пустым, чтобы не менять" : "";
+        if (kind === "service_account") {
+          return field("JSON-ключ сервисного аккаунта",
+            `<textarea id="cred-${n}" class="ui-textarea" rows="4" placeholder="${keep || "вставьте содержимое файла ключа целиком"}"></textarea>`,
+            "Файл, скачанный при создании ключа в консоли облака. Поделитесь папками с адресом этого аккаунта.");
+        }
+        if (kind === "oauth2") {
+          const st = (cfg.oauth || {})[c.name] || {};
+          const signIn = saved
+            ? `<div class="actions">
+                 ${st.signed_in
+                   ? `<span class="ok">Вход выполнен${st.account ? " как " + esc(st.account) : ""}.</span>`
+                   : `<span class="err">Вход ещё не выполнен.</span>`}
+                 <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="oauthStart(${esc(JSON.stringify(cfg.id))}, ${esc(JSON.stringify(c.name))})">${st.signed_in ? "Войти заново" : "Войти"}</button>
+                 <span id="oauth-status-${n}" class="ui-note"></span>
+               </div>
+               ${st.signed_in
+                 // Signed in, the paste is only for signing in again from another
+                 // machine — folded, so the form does not read as unfinished.
+                 ? `<details><summary class="ui-note">Браузер на другой машине?</summary>${oauthPaste(cfg, c)}</details>`
+                 : oauthPaste(cfg, c)}`
+            : `<p class="ui-note">Сохраните подключение — после этого здесь появится кнопка «Войти».</p>`;
+          return `<div class="grid">
+            ${field("Client ID своего OAuth-клиента", `<input id="cred-oauth-id-${n}" class="ui-input" autocomplete="off" placeholder="${keep || "…apps.googleusercontent.com"}" />`)}
+            ${field("Client secret", `<input id="cred-oauth-secret-${n}" class="ui-input" type="password" autocomplete="off" placeholder="${keep}" />`)}
+            </div>${signIn}`;
+        }
+        const account = kind === "basic" || kind === "password"
+          ? field("Учётная запись", `<input id="cred-user-${n}" class="ui-input" value="${esc(((cfg.credential_users || {})[c.name] || ""))}"
+                 placeholder="${kind === "password" ? "например CORP\\svc-buff или svc-buff" : "например buff@company.ru"}" />`, "", ` title="${n}"`)
+          : "";
+        if (kind === "password") {
+          return `${account}${field("Пароль", `<input id="cred-${n}" class="ui-input" type="password" placeholder="${keep}" />`,
+            "Этот пароль интеграция получает сама: её протокол коннектор подставить не может. Заведите отдельную учётную запись только на чтение.",
+            ` title="${n}"`)}`;
+        }
+        return `${account}${field(esc(SECRET_NAMES[kind] || KIND_NAMES[kind] || kind),
+          `<input id="cred-${n}" class="ui-input" type="password" placeholder="${keep}" />`, "", ` title="${n}"`)}`;
+      }
+      // The value the save sends for one credential, by kind: an OAuth client is
+      // two fields that travel as one JSON secret; the rest are one field.
+      function credentialValue(c) {
+        const kindNode = $("cred-kind-" + c.name);
+        const kind = kindNode ? kindNode.value : (c.kinds || [])[0];
+        if (kind === "oauth2") {
+          const id = ($("cred-oauth-id-" + c.name) || {}).value || "";
+          const secret = ($("cred-oauth-secret-" + c.name) || {}).value || "";
+          return { kind, value: id || secret ? JSON.stringify({ client_id: id.trim(), client_secret: secret.trim() }) : "" };
+        }
+        const node = $("cred-" + c.name);
+        return { kind, value: node && node.value ? node.value : "" };
+      }
+      async function oauthStart(id, name) {
+        const status = $("oauth-status-" + name);
+        status.textContent = "";
+        const r = await api("/api/instances/oauth/start", { id, name });
+        if (!r.ok) { status.innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
+        // A new tab, because the return replaces the page it lands in, and
+        // this one stays open with the paste field for when it lands nowhere.
+        window.open(r.url, "_blank", "noopener");
+        status.textContent = "Завершите вход в открывшейся вкладке; потом обновите эту страницу.";
+      }
+      async function oauthFinish(id, name) {
+        const status = $("oauth-status-" + name);
+        const r = await api("/api/instances/oauth/finish", { id, name, pasted: $("oauth-paste-" + name).value });
+        if (!r.ok) { status.innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
+        status.innerHTML = `<span class="ok">Вход выполнен${r.account ? " как " + esc(r.account) : ""}.</span>`;
+        await load();
+        await loadPlugins();
+      }
+
+      // A source that signs callbacks with a secret IT mints (Notion): the
+      // connector learns the token from the source's first, unsigned call and
+      // shows it here, because the operator has to paste it back into the source
+      // to confirm the subscription. A later token waits for the operator.
+      function signing(man, cfg) {
+        const spec = man.signature || {};
+        if (!spec.secret_from) return "";
+        const got = cfg.signing_secret
+          ? `<p class="ui-note">Токен подписи, который прислал источник — вставьте его в форму
+               подтверждения подписки там:</p>
+             <div class="ui-panel ui-panel--inset hookurl"><code id="i-sign-token">${esc(cfg.signing_secret)}</code>
+               <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="copyFrom('i-sign-token','i-sign-copied')">Скопировать</button></div>
+             <span id="i-sign-copied" class="ok"></span>`
+          : `<p class="ui-note">Токен подписи ещё не получен: сохраните подключение, добавьте
+               ссылку выше в настройках интеграции у источника — его первый вызов принесёт токен, и он появится здесь.</p>`;
+        const pending = cfg.signing_secret_pending
+          ? `<p class="err">Источник прислал <b>новый</b> токен подписи:
+               <code id="i-sign-pending">${esc(cfg.signing_secret_pending)}</code>. Вызовы пока проверяются прежним.
+               Чтобы принять новый, вставьте его в поле ниже и сохраните.</p>`
+          : "";
+        return `<div class="stack">
+          <p class="ui-note">Подпись: источник подписывает вызовы <b>своим</b> токеном
+            (заголовок <code>${esc(spec.header || "")}</code>), а не секретом из ссылки. Коннектор проверяет каждый вызов этим
+            токеном; без него подписанные вызовы отклоняются.</p>
+          ${got}${pending}
+          ${field("Секрет подписи — ввести вручную",
+            `<input id="i-sign" class="ui-input" type="text" autocomplete="off" placeholder="обычно не нужно: коннектор получает его сам" />`,
+            "Заполняйте, только если подписку пересоздали и нужно принять новый токен.")}
+        </div>`;
+      }
+
+      async function saveInstance() {
+        const man = manifestOf(editing.plugin, editing.version);
+        const props = (man.schema || {}).properties || {};
+        const config = {};
+        for (const key of fieldOrder(man.schema || {})) {
+          const p = props[key];
+          const node = $("f-" + key);
+          if (!node) continue;
+          if (p.type === "array") {
+            const v = node.value.split(",").map((s) => s.trim()).filter(Boolean);
+            if (v.length) config[key] = v;
+          } else if (p.type === "boolean") {
+            config[key] = node.checked;
+          } else if (p.type === "integer" || p.type === "number") {
+            if (node.value !== "") config[key] = Number(node.value);
+          } else if (node.value !== "") {
+            config[key] = node.value;
+          }
+        }
+        const credentials = {};
+        const credential_users = {};
+        const credential_kinds = {};
+        for (const c of man.credentials || []) {
+          const { kind, value } = credentialValue(c);
+          if (value) credentials[c.name] = value;
+          if (kind) credential_kinds[c.name] = kind;
+          const user = $("cred-user-" + c.name);
+          if (user && user.value) credential_users[c.name] = user.value;
+        }
+        const r = await api("/api/instances/save", {
+          id: editing.id || "", plugin: editing.plugin, version: editing.version,
+          alias: $("i-alias").value, dev_project: $("i-dev").value,
+          webhook: $("i-hook") ? $("i-hook").checked : undefined,
+          poll_seconds: $("i-poll") && $("i-poll").value !== "" ? Number($("i-poll").value) : 0,
+          signing_secret: $("i-sign") ? $("i-sign").value.trim() : "",
+          ai_notes: $("i-notes").value,
+          ai_notes_unbounded: $("i-notes-unbounded").checked,
+          askers: $("i-askers").value.split("\n").map((l) => l.trim()).filter(Boolean),
+          askers_members: $("i-askers-members").checked,
+          config, credentials, credential_users, credential_kinds,
+        });
+        if (!r.ok) { $("i-status").innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
+        $("instanceForm").innerHTML = "";
+        // load() refreshes st.fingerprint — the file just changed, and the next
+        // write must be based on what is there now.
+        await load();
+        await loadPlugins();
+      }
+
+      async function deleteInstance(id) {
+        const r = await api("/api/instances/delete", { id });
+        if (!r.ok) { alert(r.error); return; }
+        await load();
+        await loadPlugins();
+      }
+
+      async function checkInstance(id, suffix = "") {
+        const el = $("chk-" + id + suffix);
+        el.textContent = "Проверяем…";
+        const r = await api("/api/instances/check", { id });
+        el.innerHTML = r.ok
+          ? `<span class="ok">${esc((r.result && r.result.detail) || "связь есть")}</span>`
+          : `<span class="err">${esc(r.error)}</span>`;
+      }
+
+      async function showLog(id, suffix = "") {
+        const r = await api("/api/instances/log?id=" + encodeURIComponent(id));
+        const lines = (r.lines || []).map((l) => esc(l.text)).join("\n");
+        $("log-" + id + suffix).innerHTML = `<pre class="ui-code-block log">${lines || "журнал пуст"}</pre>`;
+      }
+
+      // ---- Buff Code (#368) ----------------------------------------------
+      async function loadIDE() {
+        const r = await api("/api/ide");
+        const list = r.developers || [];
+        badge("ide", list.length ? String(list.length) : "");
+        if (!list.length) return;
+        $("ideDevs").innerHTML = list.map((d) => `<div class="ui-card" data-item>
+          <div class="ui-card__header">
+            <h3 class="ui-card__title title-row">${esc(d.developer)} ${pill("ok", plural(d.calls, "вызов", "вызова", "вызовов"))}${d.errors
+              ? ` ${pill("warn", plural(d.errors, "с ошибкой", "с ошибкой", "с ошибкой"))}` : ""}</h3>
+            <p class="ui-card__description">последний вызов — ${esc(new Date(d.last).toLocaleString("ru-RU"))}</p>
+          </div>
+        </div>`).join("");
+      }
+
+      async function load() {
+        loadIDE();
+        st = await api("/api/state");
+        $("mw").value = st.middleware_url || "";
+        $("state").value = st.state_dir || "";
+        $("hooklisten").value = (st.webhooks && st.webhooks.listen) || "";
+        $("hookhost").value = (st.webhooks && st.webhooks.host) || "";
+        renderProviders();
+        renderOverview();
+        loadPlugins();
+      }
+
+      function renderProviders() {
+        const el = $("provs");
+        if (!st.providers || !st.providers.length) { el.innerHTML = '<div class="ui-empty ui-empty--inline">Пока нет провайдеров.</div>'; return; }
+        el.innerHTML = `<div class="ui-table-frame ui-table-frame--framed"><div class="ui-table-wrap"><table class="ui-table">
+          <thead><tr><th>Тип</th><th>Адрес</th><th class="ui-table__num">Репозитории</th><th></th></tr></thead>
+          <tbody>${st.providers.map((p, i) =>
+            `<tr><td><b>${p.kind}</b></td><td class="ui-table__muted">${p.base_url}</td><td class="ui-table__num">${(p.repos || []).length} репо</td>
+               <td class="ui-table__num"><button class="ui-btn ui-btn--danger ui-btn--sm" onclick="removeProvider(${i})">удалить</button></td></tr>`).join("")}</tbody>
+        </table></div></div>`;
+      }
+
+      // Persist the whole config (+ an optional new provider). Every section is
+      // always sent: saving a provider must never drop the rest. Secrets go up
+      // blank, which the agent reads as "unchanged".
+      async function persist(extra) {
+        const providers = (st.providers || []).map((p) => ({ kind: p.kind, base_url: p.base_url, token: "", repos: p.repos }));
+        if (extra && extra.kind) providers.push(extra);
+        return api("/api/save", {
+          middleware_url: $("mw").value, state_dir: $("state").value,
+          webhooks: { listen: $("hooklisten").value.trim(), host: $("hookhost").value.trim() },
+          providers,
+        });
+      }
+
+      async function validate() {
+        const vs = $("vstatus");
+        vs.textContent = "проверка…"; vs.className = "ui-note";
+        const res = await api("/api/validate", { kind: $("kind").value, base_url: $("base").value, token: $("token").value });
+        if (!res.ok) { vs.textContent = "нет доступа: " + res.error; vs.className = "err"; $("repobox").style.display = "none"; return; }
+        vs.textContent = "доступ есть ✓"; vs.className = "ok";
+        $("repos").innerHTML = (res.repos || []).map((r) =>
+          `<label class="ui-check"><input type="checkbox" class="ui-checkbox" value="${r.repo}" /><span>${r.repo}</span>${r.private ? pill("neutral", "private") : ""}</label>`).join("") || '<span class="ui-note">Репозитории не найдены.</span>';
+        $("repobox").style.display = "";
+      }
+
+      async function addProvider() {
+        const checked = [...document.querySelectorAll("#repos input:checked")].map((c) => c.value);
+        if (!checked.length) { alert("Отметьте хотя бы один репозиторий"); return; }
+        const res = await persist({ kind: $("kind").value, base_url: $("base").value, token: $("token").value, repos: checked });
+        if (!res.ok) { alert("Ошибка сохранения: " + res.error); return; }
+        $("token").value = ""; $("base").value = "";
+        $("repobox").style.display = "none"; $("vstatus").textContent = "";
+        await load();
+      }
+
+      async function removeProvider(i) {
+        st.providers.splice(i, 1);
+        const res = await persist(null);
+        if (!res.ok) alert("Ошибка: " + res.error);
+        await load();
+      }
+
+      async function doPair() {
+        const ps = $("pstatus");
+        ps.textContent = "привязка…"; ps.className = "ui-note";
+        const res = await api("/api/pair", { code: $("code").value.trim() });
+        if (!res.ok) { ps.textContent = "не удалось: " + res.error; ps.className = "err"; return; }
+        ps.textContent = "готово ✓ агент подключён"; ps.className = "ok";
+      }
+
+      // ---- theme ----------------------------------------------------------
+      // The apps' light / dark / system switch (@buff/ui's useTheme and ThemeToggle):
+      // the choice lives under localStorage 'theme', 'system' follows the OS live, and
+      // the painted mode is .dark on <html>. The boot script in <head> reads the same key.
+      const THEME_KEY = "theme";
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
+      function readTheme() {
+        try {
+          const t = localStorage.getItem(THEME_KEY);
+          return t === "light" || t === "dark" || t === "system" ? t : "system";
+        } catch {
+          return "system";
+        }
+      }
+      function paintTheme() {
+        const t = readTheme();
+        document.documentElement.classList.toggle("dark", t === "dark" || (t === "system" && prefersDark.matches));
+        for (const item of document.querySelectorAll("[data-theme-value]"))
+          item.setAttribute("aria-checked", String(item.dataset.themeValue === t));
+      }
+      function setTheme(t) {
+        try {
+          localStorage.setItem(THEME_KEY, t);
+        } catch {
+          // Storage unavailable: the choice holds for this page only.
+        }
+        paintTheme();
+      }
+      function openThemeMenu() {
+        $("themeMenu").hidden = false;
+        $("themeButton").setAttribute("aria-expanded", "true");
+        (document.querySelector('[data-theme-value][aria-checked="true"]') || document.querySelector("[data-theme-value]")).focus();
+      }
+      function closeThemeMenu(refocus) {
+        if ($("themeMenu").hidden) return;
+        $("themeMenu").hidden = true;
+        $("themeButton").setAttribute("aria-expanded", "false");
+        if (refocus) $("themeButton").focus();
+      }
+      (function themeSwitch() {
+        const menu = $("themeMenu");
+        const items = () => [...menu.querySelectorAll("[data-theme-value]")];
+        prefersDark.addEventListener("change", paintTheme);
+        $("themeButton").addEventListener("click", () => (menu.hidden ? openThemeMenu() : closeThemeMenu(true)));
+        $("themeButton").addEventListener("keydown", (e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); openThemeMenu(); }
+        });
+        menu.addEventListener("click", (e) => {
+          const item = e.target.closest("[data-theme-value]");
+          if (!item) return;
+          setTheme(item.dataset.themeValue);
+          closeThemeMenu(true);
+        });
+        menu.addEventListener("keydown", (e) => {
+          const list = items();
+          const at = list.indexOf(document.activeElement);
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            list[(at + (e.key === "ArrowDown" ? 1 : list.length - 1)) % list.length].focus();
+          } else if (e.key === "Home" || e.key === "End") {
+            e.preventDefault();
+            list[e.key === "Home" ? 0 : list.length - 1].focus();
+          } else if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            if (at >= 0) { setTheme(list[at].dataset.themeValue); closeThemeMenu(true); }
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            closeThemeMenu(true);
+          } else if (e.key === "Tab") {
+            closeThemeMenu(false);
+          }
+        });
+        document.addEventListener("pointerdown", (e) => {
+          if (!e.target.closest(".theme")) closeThemeMenu(false);
+        });
+        paintTheme();
+      })();
+
+      $("navHost").textContent = location.host;
+      show(current());
+      load();
+    </script>
+  </body>
+</html>

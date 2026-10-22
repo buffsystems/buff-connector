@@ -1,0 +1,137 @@
+/*
+  Chip and Segmented (#561, from #270).
+  A filter chip: a pressed one inverts to the foreground colour so the active filter is
+  unmistakable; the count rides inside it. 44px on touch, 36px from the desktop breakpoint.
+    <button class="ui-chip" aria-pressed="true">Все <span class="ui-chip__count">9</span></button>
+  Without aria-pressed the chip is a plain action button in the same look.
+  A segmented control: equal cells that read as one object. Two per row on a phone (three
+  short options fit one row), four in a row on the desktop. A label too long for its cell wraps;
+  a cell whose word still does not fit takes a row of its own.
+    <div class="ui-segmented ui-segmented--2" role="group"><button class="ui-segmented__item" aria-pressed="true">…</button>…</div>
+*/
+@layer components {
+  .ui-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .ui-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 2.75rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background-color: var(--card);
+    color: var(--fg-2);
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    padding: 0 0.75rem;
+  }
+  .ui-chip:hover {
+    background-color: var(--muted);
+  }
+  .ui-chip:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  .ui-chip[aria-pressed='true'] {
+    border-color: var(--foreground);
+    background-color: var(--foreground);
+    color: var(--background);
+  }
+  .ui-chip__count {
+    font-variant-numeric: tabular-nums;
+    opacity: 0.7;
+  }
+
+  /*
+    Cells are flex items with a per-column basis, so short labels sit in equal columns just like
+    a grid. A long label wraps inside its cell; a word that still does not fit pushes the cell
+    onto a row of its own, so the group grows down instead of clipping text. The 1px lines
+    between cells are each cell's ring showing through the 1px gap: the frame clips the outer
+    edges, and the lines follow whatever rows the cells end up in.
+  */
+  .ui-segmented {
+    --ui-segmented-cols: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background-color: var(--card);
+  }
+  .ui-segmented--3 {
+    --ui-segmented-cols: 3;
+  }
+  .ui-segmented__item {
+    flex: 1 1 calc(100% / var(--ui-segmented-cols) - 1px);
+    min-height: 2.5rem;
+    border: 0;
+    background-color: var(--card);
+    box-shadow: 0 0 0 1px var(--border);
+    color: var(--fg-2);
+    font: inherit;
+    font-size: 13px;
+    line-height: 1.125rem;
+    font-weight: 500;
+    text-wrap: balance;
+    padding: 0.375rem 0.5rem;
+  }
+  .ui-segmented__item:hover {
+    background-color: var(--muted);
+  }
+  .ui-segmented__item:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+  .ui-segmented__item[aria-pressed='true'] {
+    background-color: var(--muted-2);
+    color: var(--foreground);
+  }
+  .ui-segmented__count {
+    margin-left: 0.25rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 400;
+    color: var(--muted-foreground);
+  }
+
+  @media (min-width: 64rem) {
+    .ui-chip {
+      min-height: 2.25rem;
+    }
+    .ui-segmented--4 {
+      --ui-segmented-cols: 4;
+    }
+  }
+}
+
+/* A compact segmented control: every option on one row, 28px high, sized by its text. */
+@layer components {
+  .ui-segmented.ui-segmented--sm {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    border-radius: var(--radius-md);
+  }
+  .ui-segmented--sm .ui-segmented__item {
+    flex: none;
+    min-height: 1.75rem;
+    white-space: nowrap;
+    padding: 0 0.625rem;
+    font-size: 0.75rem;
+  }
+}
+
+/* A compact chip for dense filter rows (a search palette's sources). */
+@layer components {
+  .ui-chip.ui-chip--sm {
+    min-height: 1.5rem;
+    gap: 0.25rem;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+}

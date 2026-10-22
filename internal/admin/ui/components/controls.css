@@ -1,0 +1,338 @@
+/*
+  Interactive controls (#561): tabs, switch, avatar, combobox.
+    Tabs:     .ui-tabs-root(.ui-tabs-root--vertical) >
+                .ui-tabs.ui-tabs--underline|pill[data-orientation] > .ui-tabs__tab[data-state=active] > __count
+                A scrolling underline bar sits in .ui-tabs-frame; [data-more-start|end] fades
+                that edge under a .ui-tabs-frame__more.ui-tabs-frame__more--start|end chevron.
+                + .ui-tabs__panel (the active tab's view)
+    Switch:   .ui-switch[data-state=checked] > .ui-switch__thumb
+    Avatar:   .ui-avatar(.ui-avatar--square) > .ui-avatar__image | .ui-avatar__fallback
+    Combobox: .ui-combobox > .ui-combobox__control > .ui-combobox__input + .ui-combobox__toggle
+*/
+@layer components {
+  .ui-tabs {
+    display: flex;
+    align-items: center;
+  }
+  .ui-tabs__tab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    white-space: nowrap;
+    border: 0 solid transparent;
+    background: none;
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    outline: none;
+    transition-property: color, background-color, border-color;
+    transition-duration: 150ms;
+  }
+  .ui-tabs__tab:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .ui-tabs__tab:disabled {
+    pointer-events: none;
+    opacity: 0.5;
+  }
+  .ui-tabs__count {
+    border-radius: 999px;
+    background-color: var(--muted);
+    padding: 0 0.375rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+
+  /* Navigation: a row of labels over a hairline, the active one underlined. */
+  .ui-tabs--underline {
+    width: 100%;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  /* Tabs hidden past an edge: that edge fades (the bar sets data-more-start / -end). */
+  .ui-tabs--underline[data-more-end] {
+    mask-image: linear-gradient(to right, black calc(100% - 3rem), rgb(0 0 0 / 0.15));
+  }
+  .ui-tabs--underline[data-more-start] {
+    mask-image: linear-gradient(to left, black calc(100% - 3rem), rgb(0 0 0 / 0.15));
+  }
+  .ui-tabs--underline[data-more-start][data-more-end] {
+    mask-image: linear-gradient(
+      to right,
+      rgb(0 0 0 / 0.15),
+      black 3rem,
+      black calc(100% - 3rem),
+      rgb(0 0 0 / 0.15)
+    );
+  }
+  .ui-tabs-frame {
+    position: relative;
+    min-width: 0;
+  }
+  .ui-tabs-frame__more {
+    position: absolute;
+    top: 50%;
+    display: flex;
+    translate: 0 -50%;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background-color: var(--background);
+    padding: 0.25rem;
+    color: var(--muted-foreground);
+    box-shadow:
+      0 1px 3px 0 rgb(0 0 0 / 0.1),
+      0 1px 2px -1px rgb(0 0 0 / 0.1);
+  }
+  .ui-tabs-frame__more:hover {
+    color: var(--foreground);
+  }
+  .ui-tabs-frame__more svg {
+    width: 14px;
+    height: 14px;
+  }
+  .ui-tabs-frame__more--start {
+    left: 0;
+  }
+  .ui-tabs-frame__more--end {
+    right: 0;
+  }
+  .ui-tabs--underline .ui-tabs__tab {
+    flex: none;
+    border-bottom-width: 2px;
+    padding: 0.5rem 0.75rem 0.625rem;
+  }
+  .ui-tabs--underline .ui-tabs__tab svg {
+    width: 1rem;
+    height: 1rem;
+  }
+  .ui-tabs--underline .ui-tabs__tab[data-state='active'] {
+    border-bottom-color: var(--primary);
+    font-weight: 600;
+    color: var(--foreground);
+  }
+
+  /* Compact: the options sit in a muted track, the active one raised. */
+  .ui-tabs--pill {
+    display: inline-flex;
+    height: 2.25rem;
+    box-sizing: border-box;
+    border-radius: var(--radius-lg);
+    background-color: var(--muted);
+    padding: 0.125rem;
+  }
+  .ui-tabs--pill .ui-tabs__tab {
+    flex: 1;
+    height: 100%;
+    border-radius: var(--radius-md);
+    padding: 0.25rem 0.625rem;
+  }
+  .ui-tabs--pill .ui-tabs__tab svg {
+    width: 14px;
+    height: 14px;
+  }
+  .ui-tabs--pill .ui-tabs__tab[data-state='active'] {
+    background-color: var(--background);
+    color: var(--foreground);
+    box-shadow:
+      0 1px 3px 0 rgb(0 0 0 / 0.1),
+      0 1px 2px -1px rgb(0 0 0 / 0.1);
+  }
+
+  /*
+    Vertical: the bar becomes a column beside the panel. Underline draws its hairline and the
+    active mark on the inline-start edge; pill stacks the options in the muted track.
+  */
+  .ui-tabs-root {
+    min-width: 0;
+  }
+  .ui-tabs-root--vertical {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+  .ui-tabs[data-orientation='vertical'] {
+    flex-direction: column;
+    align-items: stretch;
+    flex: none;
+  }
+  .ui-tabs[data-orientation='vertical'] .ui-tabs__tab {
+    justify-content: flex-start;
+    text-align: start;
+  }
+  .ui-tabs--underline[data-orientation='vertical'] {
+    width: auto;
+    gap: 0.125rem;
+    border-bottom: 0;
+    border-inline-start: 1px solid var(--border);
+    overflow-x: visible;
+  }
+  .ui-tabs--underline[data-orientation='vertical'] .ui-tabs__tab {
+    margin-inline-start: -1px;
+    border-bottom-width: 0;
+    border-inline-start-width: 2px;
+    padding: 0.375rem 0.75rem;
+  }
+  .ui-tabs--underline[data-orientation='vertical'] .ui-tabs__tab[data-state='active'] {
+    border-inline-start-color: var(--primary);
+  }
+  .ui-tabs--pill[data-orientation='vertical'] {
+    display: flex;
+    height: auto;
+    gap: 0.125rem;
+  }
+  .ui-tabs--pill[data-orientation='vertical'] .ui-tabs__tab {
+    height: 2rem;
+  }
+  .ui-tabs[data-orientation='vertical'] .ui-tabs__count {
+    margin-inline-start: auto;
+  }
+
+  /* The active tab's view: under the bar, or beside it when vertical. */
+  .ui-tabs__panel {
+    min-width: 0;
+    padding-top: 1rem;
+    border-radius: var(--radius-md);
+    outline: none;
+  }
+  .ui-tabs-root--vertical > .ui-tabs__panel {
+    flex: 1;
+    padding-top: 0;
+  }
+  .ui-tabs__panel:focus-visible {
+    box-shadow: 0 0 0 2px var(--ring);
+  }
+
+  .ui-switch {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    width: 2rem;
+    height: 1.15rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background-color: var(--input);
+    padding: 0;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    outline: none;
+    transition: background-color 150ms;
+  }
+  .ui-switch[data-state='checked'] {
+    background-color: var(--primary);
+  }
+  .ui-switch:focus-visible {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
+  }
+  .ui-switch:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .ui-switch__thumb {
+    display: block;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 999px;
+    background-color: var(--background);
+    pointer-events: none;
+    transition: transform 150ms;
+  }
+  .ui-switch[data-state='checked'] .ui-switch__thumb {
+    transform: translateX(calc(100% - 2px));
+  }
+
+  .ui-avatar {
+    --ui-avatar-size: 24px;
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    width: var(--ui-avatar-size);
+    height: var(--ui-avatar-size);
+    overflow: hidden;
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 60%, transparent);
+  }
+  .ui-avatar--square {
+    border-radius: var(--radius-md);
+  }
+  .ui-avatar__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .ui-avatar__fallback {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    align-items: center;
+    justify-content: center;
+    /* `background`, not `-color`: the fill may be a gradient. */
+    background: var(--ui-avatar-color, var(--muted));
+    color: #fff;
+    font-size: calc(var(--ui-avatar-size) * 0.42);
+    font-weight: 600;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  /* No colour to sit on: the initials read on the muted fill. */
+  .ui-avatar--plain .ui-avatar__fallback {
+    color: var(--muted-foreground);
+  }
+  .ui-avatar__fallback svg {
+    width: calc(var(--ui-avatar-size) * 0.56);
+    height: calc(var(--ui-avatar-size) * 0.56);
+  }
+
+  .ui-combobox {
+    position: relative;
+  }
+  .ui-combobox__control {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background-color: var(--background);
+  }
+  .ui-combobox__control:focus-within {
+    border-color: var(--primary);
+  }
+  .ui-combobox__input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.375rem 0.75rem;
+    outline: none;
+  }
+  .ui-combobox__input::placeholder {
+    color: var(--muted-foreground);
+  }
+  .ui-combobox__input:disabled,
+  .ui-combobox__toggle:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .ui-combobox__toggle {
+    display: flex;
+    border: 0;
+    background: none;
+    color: var(--muted-foreground);
+    padding: 0 0.5rem;
+  }
+  .ui-combobox__toggle:hover {
+    color: var(--foreground);
+  }
+  .ui-combobox__toggle svg {
+    width: 14px;
+    height: 14px;
+  }
+}

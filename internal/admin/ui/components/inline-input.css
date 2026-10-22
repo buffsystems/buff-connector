@@ -1,0 +1,58 @@
+/*
+  Inline input (#561, for the Buff Code desktop): a field that reads as plain text until hovered
+  or focused — renaming a tab, a session, a project in place. It takes the surrounding type
+  (size, weight) and grows with its text.
+    <input class="ui-inline-input" value="Рефакторинг auth" aria-label="Название сессии">
+  `ui-inline-input--bare`: no edge or inset until focused — the text sits exactly where the words
+  around it would (a tab's label); the focus ring is drawn outside, so nothing shifts.
+*/
+@layer components {
+  .ui-inline-input {
+    field-sizing: content;
+    min-width: 2ch;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin: 0 -0.3125rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background-color: transparent;
+    color: inherit;
+    padding: 0 0.25rem;
+    font: inherit;
+    letter-spacing: inherit;
+    text-overflow: ellipsis;
+    outline: none;
+    transition:
+      border-color 150ms,
+      background-color 150ms,
+      box-shadow 150ms;
+  }
+  .ui-inline-input:hover {
+    border-color: var(--border);
+  }
+  .ui-inline-input:focus {
+    border-color: var(--ring);
+    background-color: var(--background);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 35%, transparent);
+  }
+  .ui-inline-input--bare {
+    margin: 0;
+    border-width: 0;
+    border-radius: 1px;
+    padding: 0;
+  }
+  .ui-inline-input--bare:focus {
+    box-shadow:
+      0 0 0 0.25rem var(--background),
+      0 0 0 calc(0.25rem + 1px) var(--ring),
+      0 0 0 calc(0.25rem + 4px) color-mix(in srgb, var(--ring) 35%, transparent);
+  }
+  .ui-inline-input::placeholder {
+    color: var(--muted-foreground);
+  }
+  .ui-inline-input:disabled {
+    border-color: transparent;
+    cursor: default;
+    opacity: 0.6;
+  }
+}

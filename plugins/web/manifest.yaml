@@ -1,0 +1,109 @@
+name: web
+version: 1.0.3
+host_api: 2
+publisher: buff
+summary: >-
+  Интернет для модели из вашего периметра — поиск и чтение публичных страниц по
+  вашим белому и чёрному спискам. Помните: адреса называет модель, и они уходят к
+  движку поиска и на сайты; прочитанная страница попадает в её контекст, а сайт может
+  содержать текст, рассчитанный на модель; DuckDuckGo работает через неофициальный
+  адрес и может отвечать проверкой «вы не робот» — тогда переключите движок на
+  SearXNG или Brave. Внутренняя сеть закрыта всегда.
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+webhook: none
+credentials:
+  # Brave принимает ключ только в своём заголовке. Нужен лишь для движка brave;
+  # DuckDuckGo и SearXNG работают без ключа.
+  - name: brave
+    kinds: [header]
+    header: X-Subscription-Token
+egress:
+  # Движки поиска — обычные правила: фиксированный хост, свои пути, свой ключ.
+  - from_config: duckduckgo_base
+    methods: [GET]
+    path_prefixes: ["/html/"]
+  - from_config: searxng_base
+    methods: [GET]
+    path_prefixes: ["/search"]
+    optional: true
+  - from_config: brave_base
+    methods: [GET]
+    path_prefixes: ["/res/v1/web/search"]
+  # Страницы — правило web: адрес называет модель, границы ставит администратор,
+  # публичность адреса проверяет коннектор и её отключить нельзя.
+  - web:
+      allow_from: allow
+      deny_from: deny
+      types_from: content_types
+    methods: [GET]
+config_schema:
+  type: object
+  properties:
+    engine:
+      type: string
+      title: Движок поиска
+      description: >-
+        duckduckgo — без ключа и настройки, но через неофициальный адрес;
+        searxng — ваш собственный метапоиск в периметре (нужен адрес, в его
+        settings.yml должен быть включён формат json); brave — Brave Search API по
+        ключу
+      enum: [duckduckgo, searxng, brave]
+      default: duckduckgo
+    duckduckgo_base:
+      type: string
+      format: uri
+      title: Адрес DuckDuckGo
+      description: Обычно менять не нужно
+      default: https://html.duckduckgo.com
+    searxng_base:
+      type: string
+      format: uri
+      title: Адрес SearXNG
+      description: Корень вашего экземпляра, например https://search.corp.local
+    brave_base:
+      type: string
+      format: uri
+      title: Адрес Brave Search API
+      description: Обычно менять не нужно
+      default: https://api.search.brave.com
+    allow:
+      type: array
+      title: Белый список
+      description: >-
+        Если заполнен — модель ходит ТОЛЬКО на эти сайты, чёрный список не
+        действует. Домен без схемы, поддомены включены, путь необязателен:
+        example.com, docs.example.com, example.com/blog, example.com/*/articles
+      items:
+        type: string
+    deny:
+      type: array
+      title: Чёрный список
+      description: >-
+        Сайты, куда модель не ходит и чьи результаты не видит. Действует, когда
+        белый список пуст. Та же форма записи, что у белого списка
+      items:
+        type: string
+    content_types:
+      type: array
+      title: Типы содержимого
+      description: >-
+        Что модели можно отдавать; пусто — любые. Например text/html,
+        application/json, text/* — по заголовку Content-Type ответа
+      items:
+        type: string
+    stop_words:
+      type: array
+      title: Стоп-слова
+      description: >-
+        Запрос поиска или адрес с любым из этих слов отклоняется на месте, без
+        обращения наружу. Регистр не важен
+      items:
+        type: string
+tools:
+  - name: web_search
+    read_only: true
+    summary: Найти в интернете — когда ответ зависит от свежих или внешних сведений, которых нет в проекте и базе знаний
+  - name: web_fetch
+    read_only: true
+    summary: Прочитать страницу по адресу — документацию, статью, ответ API — когда адрес известен или найден поиском

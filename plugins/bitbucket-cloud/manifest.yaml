@@ -1,0 +1,57 @@
+name: bitbucket-cloud
+version: 1.1.0
+host_api: 1
+publisher: buff
+summary: Bitbucket Cloud — вопросы и ответы прямо в pull request bitbucket.org
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+webhook: deliver
+credentials:
+  - name: api
+    kinds: [bearer, basic]
+egress:
+  # Every address a plugin may reach is DERIVED from a field the operator can
+  # see, so the consent screen never has to be taken on trust. Bitbucket Cloud's
+  # address is fixed, and it is still a field for exactly that reason.
+  - from_config: base_url
+    methods: [GET, POST]
+    path_prefixes: ["/2.0/"]
+config_schema:
+  type: object
+  required: [base_url, repos]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес API Bitbucket Cloud
+      description: >-
+        https://api.bitbucket.org — менять не нужно; поле существует, чтобы
+        адрес, по которому ходит интеграция, был виден до установки.
+    repos:
+      type: array
+      title: Репозитории
+      description: >-
+        В этих репозиториях бот отвечает на обращения в pull request — и только
+        в них он пишет. Формат рабочее-пространство/репозиторий, например acme/api.
+        Своего трекера задач у Bitbucket Cloud больше нет: Atlassian убрал его
+        из API, поэтому обращения живут в pull request.
+      items:
+        type: string
+        pattern: "^[^/\\s]+/[^/\\s]+$"
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: Дополнительное имя помимо учётной записи, например buff
+tools:
+  - name: search_pulls
+    read_only: true
+    summary: Найти pull request по тексту — когда упомянут номер или нужен контекст из ревью
+  - name: get_pull
+    read_only: true
+    summary: Прочитать pull request с обсуждением — когда нужен замысел изменения или ход ревью
+  - name: get_pull_diff
+    read_only: true
+    summary: Прочитать изменения pull request одним diff
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий в pull request

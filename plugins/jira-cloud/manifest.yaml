@@ -1,0 +1,54 @@
+name: jira-cloud
+version: 1.1.0
+host_api: 1
+publisher: buff
+summary: Jira Cloud — задачи, вопросы и ответы прямо в тикетах atlassian.net
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+webhook: deliver
+credentials:
+  - name: api
+    kinds: [basic]
+egress:
+  - from_config: base_url
+    methods: [GET, POST]
+    path_prefixes: ["/rest/"]
+config_schema:
+  type: object
+  required: [base_url, project_keys]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес Jira Cloud
+      description: Адрес вашего сайта, например https://acme.atlassian.net
+    project_keys:
+      type: array
+      title: Ключи проектов
+      description: В этих проектах бот отвечает на обращения — и только в них он пишет
+      items:
+        type: string
+        pattern: "^[A-Z][A-Z0-9_]+$"
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: Дополнительное имя помимо отображаемого, например buff
+    accept_assignment:
+      type: boolean
+      title: Принимать тикеты, назначенные боту
+      description: >-
+        По умолчанию бот берётся за работу только по прямому обращению —
+        упоминанию в комментарии. Назначение тикета на его учётную запись тоже
+        адресовано ему, но случается и по правилам маршрутизации, когда работу
+        заказать никто не хотел. Включайте, если назначение у вас делает человек
+        осознанно.
+tools:
+  - name: search_issues
+    read_only: true
+    summary: Найти тикеты по JQL — когда упомянут ключ или нужен контекст из трекера
+  - name: get_issue
+    read_only: true
+    summary: Прочитать тикет целиком с комментариями — когда нужны требования или обсуждение
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий в тикет

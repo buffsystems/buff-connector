@@ -1,0 +1,6 @@
+# Проверено при выпуске на публичный GitHub (#624): фикции тестов, не секреты.
+# Отпечаток держит номер строки — правка строки снова требует проверки.
+# Ключ пользователя Confluence — идентификатор, не пароль.
+/scan/plugins/confluence/tests/test_confluence.py:generic-api-key:32
+# Придуманный секрет подписи вебхука Notion.
+/scan/plugins/notion/tests/test_notion.py:generic-api-key:29

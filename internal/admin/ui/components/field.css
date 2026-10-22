@@ -1,0 +1,156 @@
+/*
+  Form fields (#561): input, textarea, native select, the label and a field that stacks them
+  with a hint or an error.
+    <div class="ui-field"><label class="ui-field__body"><span class="ui-label">Имя</span>
+      <input class="ui-input" aria-describedby="hint"></label>
+      <span class="ui-field__hint" id="hint">…</span></div>
+  The hint or error sits outside the <label>, so it describes the control rather than joining
+  its name. A bare <label class="ui-field"> wrapping all three still lays out the same.
+    <div class="ui-select"><select>…</select></div>
+  The select stays native (the platform picker on a phone); the wrapper draws the chevron.
+*/
+@layer components {
+  .ui-field,
+  .ui-field__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+  .ui-field__hint {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--muted-foreground);
+  }
+  .ui-field__error {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--destructive);
+  }
+
+  .ui-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1;
+    font-weight: 500;
+    user-select: none;
+  }
+
+  .ui-input,
+  .ui-textarea,
+  .ui-select select {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid var(--input);
+    border-radius: var(--radius-md);
+    background-color: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    outline: none;
+    transition:
+      color 150ms,
+      box-shadow 150ms;
+  }
+  .ui-input,
+  .ui-select select {
+    height: 2.25rem;
+    padding: 0.25rem 0.75rem;
+  }
+  .ui-textarea {
+    field-sizing: content;
+    min-height: 4rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .ui-input::placeholder,
+  .ui-textarea::placeholder {
+    color: var(--muted-foreground);
+  }
+  .ui-input:focus-visible,
+  .ui-textarea:focus-visible,
+  .ui-select select:focus-visible {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 50%, transparent);
+  }
+  .ui-input:disabled,
+  .ui-textarea:disabled,
+  .ui-select select:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  .ui-input[aria-invalid='true'],
+  .ui-textarea[aria-invalid='true'],
+  .ui-select select[aria-invalid='true'] {
+    border-color: var(--destructive);
+  }
+
+  .ui-select {
+    position: relative;
+    display: flex;
+  }
+  .ui-select select {
+    appearance: none;
+    padding-right: 2rem;
+  }
+  .ui-select select option {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+  .ui-select::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 0.625rem;
+    width: 1rem;
+    height: 1rem;
+    transform: translateY(-50%);
+    pointer-events: none;
+    background-color: var(--muted-foreground);
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+}
+
+/*
+  Compact fields and a field with a leading icon (#561, second pass):
+    <input class="ui-input ui-input--sm">   <div class="ui-select ui-select--sm"><select>…</select></div>
+    <div class="ui-input-group"><svg class="ui-input-group__icon"/><input class="ui-input"></div>
+*/
+@layer components {
+  .ui-input.ui-input--sm,
+  .ui-select--sm select {
+    height: 1.75rem;
+    padding-top: 0;
+    padding-bottom: 0;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+  .ui-input--sm {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  .ui-select--sm select {
+    padding-left: 0.5rem;
+  }
+  .ui-input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .ui-input-group__icon {
+    pointer-events: none;
+    position: absolute;
+    left: 0.625rem;
+    width: 1rem;
+    height: 1rem;
+    color: var(--muted-foreground);
+  }
+  .ui-input-group .ui-input {
+    padding-left: 2.125rem;
+  }
+}

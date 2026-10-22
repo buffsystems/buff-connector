@@ -1,0 +1,20 @@
+/*
+  Animated number (#561, for the Buff Code desktop): a figure that counts to its new value.
+  Tabular digits so the width does not wobble; the final value is in a visually hidden label for
+  assistive tech while the visible one runs.
+    <span class="ui-animated-number"><span aria-hidden="true">41</span>
+      <span class="ui-animated-number__label">42</span></span>
+*/
+@layer components {
+  .ui-animated-number {
+    font-variant-numeric: tabular-nums;
+  }
+  .ui-animated-number__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

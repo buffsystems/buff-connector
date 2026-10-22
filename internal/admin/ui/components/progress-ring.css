@@ -1,0 +1,35 @@
+/*
+  Progress ring (#561, for the Buff Code desktop): a determinate ring — an upload, the share of
+  the context window used. The arc starts at the top and runs clockwise.
+    <svg class="ui-progress-ring(.ui-progress-ring--ok|warn|crit)" role="progressbar" aria-valuenow="42">
+      <circle class="ui-progress-ring__track"/><circle class="ui-progress-ring__value"/></svg>
+*/
+@layer components {
+  .ui-progress-ring {
+    flex-shrink: 0;
+    transform: rotate(-90deg);
+  }
+  .ui-progress-ring__track {
+    stroke: color-mix(in srgb, var(--foreground) 12%, transparent);
+  }
+  .ui-progress-ring__value {
+    stroke: var(--primary);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 300ms ease-out;
+  }
+  .ui-progress-ring--ok .ui-progress-ring__value {
+    stroke: var(--success);
+  }
+  .ui-progress-ring--warn .ui-progress-ring__value {
+    stroke: var(--warning);
+  }
+  .ui-progress-ring--crit .ui-progress-ring__value {
+    stroke: var(--destructive);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-progress-ring__value {
+    transition: none;
+  }
+}

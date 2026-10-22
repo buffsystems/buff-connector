@@ -1,0 +1,92 @@
+name: figma
+version: 1.1.0
+host_api: 1
+publisher: buff
+summary: Figma — макеты как источник знаний для ответов и вопросы прямо в комментариях к дизайну; размеры, цвета и стили — для любой модели, картинка — только для модели, которая видит
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+# Из FILE_COMMENT берутся только файл и номер комментария; сам комментарий читается
+# через API, потому что в теле нет parent_id, а отвечать надо в ветку его корня.
+# Без перечисленных файлов и проектов только вызов и говорит, в каком файле бота
+# упомянули: перечислить все файлы учётной записи API Figma не умеет. Опрос читает
+# перечисленные файлы, а без них — файлы, где бота уже упоминали, и так подбирает
+# потерянные вызовы. Секрет — сама ссылка; Figma передаёт passcode в теле, а не подписью.
+webhook: deliver
+credentials:
+  # Figma принимает personal access token только в своём заголовке.
+  - name: api
+    kinds: [header]
+    header: X-Figma-Token
+egress:
+  - from_config: base_url
+    methods: [GET, POST]
+    path_prefixes: ["/v1/", "/v2/"]
+  # Отрисованные картинки Figma отдаёт со своего хранилища, а не с api.figma.com.
+  - from_config: images_base
+    methods: [GET]
+    path_prefixes: ["/"]
+config_schema:
+  type: object
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес API Figma
+      description: Обычно менять не нужно
+      default: https://api.figma.com
+    images_base:
+      type: string
+      format: uri
+      title: Адрес выдачи картинок
+      description: Откуда Figma отдаёт отрисованные изображения; обычно менять не нужно
+      default: https://figma-alpha-api.s3.us-west-2.amazonaws.com
+    files:
+      type: array
+      title: Файлы
+      description: >-
+        Ключи макетов, с которыми работает бот, — и только в них он читает и пишет.
+        Ключ виден в адресе файла: figma.com/design/КЛЮЧ/…. Если пусты и файлы, и
+        проекты — бот работает с любым файлом, открытым учётной записи, и отвечает
+        там, где его упомянули (нужен вебхук о комментариях)
+      items:
+        type: string
+        pattern: "^[A-Za-z0-9_-]+$"
+    projects:
+      type: array
+      title: Проекты
+      description: >-
+        Идентификаторы проектов Figma — бот работает со всеми их файлами. Номер виден
+        в адресе проекта: figma.com/files/project/НОМЕР/…
+      items:
+        type: string
+        pattern: "^[0-9]+$"
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: Дополнительное имя помимо учётной записи, например buff
+tools:
+  - name: list_files
+    read_only: true
+    summary: Перечислить подключённые макеты — когда вопрос про дизайн, а файл не назван; без списка в подключении — файлы, где бота упоминали
+  - name: get_file
+    read_only: true
+    summary: Структура макета — страницы, фреймы, размеры, стили и компоненты файла
+  - name: get_node
+    read_only: true
+    summary: Узел с параметрами — положение, автолейаут, цвета в hex, типографика, стили и переменные по именам
+  - name: get_styles
+    read_only: true
+    summary: Стили файла со значениями и переменные по режимам, если тариф Figma даёт их читать
+  - name: search_nodes
+    read_only: true
+    summary: Найти узлы по словам в имени слоя или тексте — когда известно название, но не id
+  - name: get_comments
+    read_only: true
+    summary: Обсуждения макета — ветки комментариев, к какому узлу приколоты, решены ли
+  - name: render_node
+    read_only: true
+    vision: true
+    summary: Отрисовать узел в PNG — только для модели, которая читает изображения
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий в обсуждение макета

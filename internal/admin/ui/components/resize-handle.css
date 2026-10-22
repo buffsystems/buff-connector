@@ -1,0 +1,47 @@
+/*
+  Resize handle (#561, for the Buff Code desktop): the draggable divider between two panes. An
+  8px grab strip, invisible until hovered, focused or dragged, when a 2px line shows. The
+  caller positions it on the pane's edge (absolute, or as a flex item between the panes).
+    <div role="separator" aria-orientation="vertical" class="ui-resize-handle" tabindex="0"
+      aria-valuenow="280" aria-valuemin="160" aria-valuemax="520"></div>
+  aria-orientation="vertical" — a vertical line between side-by-side panes (resizes a width);
+  "horizontal" — a line between stacked panes (resizes a height). [data-dragging] while dragged.
+*/
+@layer components {
+  .ui-resize-handle {
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+    outline: none;
+    touch-action: none;
+  }
+  .ui-resize-handle[aria-orientation='vertical'] {
+    width: 8px;
+    align-self: stretch;
+    cursor: col-resize;
+  }
+  .ui-resize-handle[aria-orientation='horizontal'] {
+    height: 8px;
+    cursor: row-resize;
+  }
+  .ui-resize-handle::after {
+    content: '';
+    position: absolute;
+    border-radius: 999px;
+    background-color: transparent;
+    transition: background-color 150ms;
+  }
+  .ui-resize-handle[aria-orientation='vertical']::after {
+    inset: 0 3px;
+  }
+  .ui-resize-handle[aria-orientation='horizontal']::after {
+    inset: 3px 0;
+  }
+  .ui-resize-handle:hover::after {
+    background-color: var(--border-strong);
+  }
+  .ui-resize-handle:focus-visible::after,
+  .ui-resize-handle[data-dragging]::after {
+    background-color: var(--primary);
+  }
+}

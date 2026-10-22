@@ -1,0 +1,174 @@
+/*
+  Navigation and lists (#561).
+    Side navigation (the #270 rail): 44px rows; the current one a card lifted off the rail.
+      <nav class="ui-nav"><p class="ui-nav__group">Управление</p>
+        <a class="ui-nav-item" aria-current="page"><svg/>Задачи<span class="ui-count">3</span></a></nav>
+    A list of clickable rows inside a panel (steps, runs, requests):
+      <ul class="ui-list"><li><button class="ui-list__item" aria-current="true">…</button></li></ul>
+    A free-standing action row (a way to start, a choice with an icon and a line under it):
+      <button class="ui-action"><span class="ui-icon-tile">…</span><span class="ui-action__text">
+        <span class="ui-action__title">…</span><span class="ui-action__hint">…</span></span>
+        <span class="ui-action__trailing"><svg/></span></button>
+*/
+@layer components {
+  .ui-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+  }
+  .ui-nav__group {
+    margin: 0.75rem 0 0.25rem;
+    padding: 0 0.625rem;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .ui-nav-item {
+    display: flex;
+    width: 100%;
+    min-height: 2.75rem;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 0.625rem;
+    border: 0;
+    border-radius: 9px;
+    background: none;
+    padding: 0 0.625rem;
+    color: var(--fg-2);
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    text-align: left;
+    text-decoration: none;
+    transition-property: color, background-color;
+    transition-duration: 150ms;
+  }
+  .ui-nav-item > svg {
+    flex-shrink: 0;
+    width: 1rem;
+    height: 1rem;
+    color: var(--muted-foreground);
+  }
+  .ui-nav-item:hover {
+    background-color: var(--card);
+    color: var(--foreground);
+  }
+  .ui-nav-item:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .ui-nav-item[aria-current='page'],
+  .ui-nav-item[aria-current='true'] {
+    background-color: var(--card);
+    color: var(--foreground);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .ui-nav-item[aria-current='page'] > svg:first-child,
+  .ui-nav-item[aria-current='true'] > svg:first-child {
+    color: var(--primary);
+  }
+  .ui-nav-item[aria-disabled='true'] {
+    opacity: 0.6;
+  }
+  .ui-nav-item__label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* On a card surface (a settings dialog's side menu) the rail is the card: invert the lift. */
+  .ui-nav--on-card .ui-nav-item:hover,
+  .ui-nav--on-card .ui-nav-item[aria-current='page'],
+  .ui-nav--on-card .ui-nav-item[aria-current='true'] {
+    background-color: var(--muted);
+    box-shadow: none;
+  }
+
+  .ui-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .ui-list > li + li {
+    border-top: 1px solid var(--border);
+  }
+  .ui-list__item {
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+    align-items: flex-start;
+    gap: 0.75rem;
+    border: 0;
+    background: none;
+    padding: 0.75rem 1rem;
+    color: inherit;
+    font: inherit;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    text-align: left;
+    text-decoration: none;
+  }
+  button.ui-list__item:hover,
+  a.ui-list__item:hover {
+    background-color: color-mix(in srgb, var(--muted) 60%, transparent);
+  }
+  .ui-list__item[aria-current='true'],
+  .ui-list__item[aria-selected='true'] {
+    background-color: var(--accent);
+  }
+
+  .ui-action {
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+    align-items: center;
+    gap: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background-color: var(--card);
+    padding: 0.75rem;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+  }
+  .ui-action:hover {
+    background-color: var(--muted);
+  }
+  .ui-action:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  .ui-action__text {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+  }
+  .ui-action__title {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+  .ui-action__hint {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--muted-foreground);
+  }
+  .ui-action__trailing {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--muted-foreground);
+  }
+  .ui-action__trailing > svg {
+    width: 1rem;
+    height: 1rem;
+  }
+}

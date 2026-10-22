@@ -1,0 +1,209 @@
+/*
+  Prose (#561, from the app's Markdown): rendered markdown / HTML set on the tokens. Code
+  stands out on its own --code-* surface, a wide table scrolls by itself, not the page.
+    <div class="ui-prose ui-prose--chat">…</div>      compact: a chat turn, a note
+    <div class="ui-prose ui-prose--document">…</div>  a reading size and a heading ladder
+*/
+@layer components {
+  .ui-prose {
+    color: var(--foreground);
+    overflow-wrap: break-word;
+  }
+  .ui-prose > :first-child {
+    margin-top: 0;
+  }
+  .ui-prose > :last-child {
+    margin-bottom: 0;
+  }
+  .ui-prose a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .ui-prose a:hover {
+    text-decoration: none;
+  }
+  .ui-prose strong {
+    font-weight: 600;
+  }
+  .ui-prose em {
+    font-style: italic;
+  }
+  .ui-prose hr {
+    height: 0;
+    margin: 1rem 0;
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+  .ui-prose blockquote {
+    margin: 0.5rem 0;
+    border-left: 2px solid var(--border);
+    padding-left: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  .ui-prose code {
+    border: 1px solid var(--code-border);
+    border-radius: var(--radius-md);
+    background-color: var(--code-bg);
+    padding: 0.1em 0.4em;
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    color: var(--code-fg);
+  }
+  .ui-prose pre {
+    margin: 0.75rem 0;
+    overflow-x: auto;
+    border: 1px solid var(--code-border);
+    border-radius: var(--radius-lg);
+    background-color: var(--code-block-bg);
+    padding: 0.875rem;
+    line-height: 1.625;
+  }
+  .ui-prose pre code {
+    border: 0;
+    background-color: transparent;
+    padding: 0;
+    font-size: 0.9em;
+    color: var(--foreground);
+  }
+  .ui-prose table {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    margin: 0.75rem 0;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+  .ui-prose th,
+  .ui-prose td {
+    border: 1px solid var(--border);
+    padding: 0.375rem 0.625rem;
+  }
+  .ui-prose th {
+    background-color: var(--muted);
+    text-align: left;
+    font-weight: 600;
+  }
+  .ui-prose td {
+    vertical-align: top;
+  }
+  .ui-prose img {
+    max-width: 100%;
+  }
+  .ui-prose input[type='checkbox'] {
+    margin-right: 0.375rem;
+  }
+  .ui-prose ul,
+  .ui-prose ol {
+    padding-left: 1.25rem;
+  }
+  .ui-prose ul {
+    list-style: disc;
+  }
+  .ui-prose ol {
+    list-style: decimal;
+  }
+  .ui-prose li::marker {
+    color: color-mix(in srgb, var(--muted-foreground) 60%, transparent);
+  }
+  .ui-prose details {
+    margin: 0.75rem 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 0.375rem 0.75rem;
+  }
+  .ui-prose summary {
+    cursor: pointer;
+    user-select: none;
+    padding: 0.25rem 0;
+    font-weight: 500;
+  }
+  .ui-prose h1,
+  .ui-prose h2,
+  .ui-prose h3,
+  .ui-prose h4 {
+    font-weight: 600;
+  }
+  .ui-prose h4 {
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--muted-foreground);
+  }
+
+  /* A chat turn: compact, the headings a notch above the text. */
+  .ui-prose--chat {
+    font-size: 13px;
+    line-height: 1.625;
+  }
+  .ui-prose--chat h1 {
+    margin: 1rem 0 0.5rem;
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+  .ui-prose--chat h2 {
+    margin: 1rem 0 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  .ui-prose--chat h3 {
+    margin: 0.75rem 0 0.375rem;
+    font-size: 13px;
+  }
+  .ui-prose--chat h4 {
+    margin: 0.75rem 0 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+  .ui-prose--chat p,
+  .ui-prose--chat ul,
+  .ui-prose--chat ol {
+    margin: 0.5rem 0;
+  }
+  .ui-prose--chat li {
+    margin: 0.25rem 0;
+  }
+  .ui-prose--chat table {
+    font-size: 0.75rem;
+    line-height: 1rem;
+  }
+
+  /* A document read top to bottom (an audit, a research): a reading size, and a heading ladder
+     whose second level rules a line, like a report does. */
+  .ui-prose--document {
+    font-size: 15px;
+    line-height: 1.65;
+  }
+  .ui-prose--document h1 {
+    margin: 1.5rem 0 1rem;
+    font-size: 24px;
+    line-height: 1.25;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+  }
+  .ui-prose--document h2 {
+    margin: 2rem 0 0.75rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.375rem;
+    font-size: 19px;
+    line-height: 1.375;
+  }
+  .ui-prose--document h3 {
+    margin: 1.5rem 0 0.5rem;
+    font-size: 16px;
+  }
+  .ui-prose--document h4 {
+    margin: 1rem 0 0.375rem;
+    font-size: 13px;
+  }
+  .ui-prose--document p,
+  .ui-prose--document ul,
+  .ui-prose--document ol {
+    margin: 0.75rem 0;
+  }
+  .ui-prose--document li {
+    margin: 0.375rem 0;
+  }
+  .ui-prose--document table {
+    font-size: 13.5px;
+  }
+}

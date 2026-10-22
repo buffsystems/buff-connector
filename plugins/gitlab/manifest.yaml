@@ -1,0 +1,64 @@
+name: gitlab
+version: 1.1.0
+host_api: 1
+publisher: buff
+summary: GitLab — вопросы и ответы прямо в задачах и merge request, self-hosted и gitlab.com
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+webhook: deliver
+signature:
+  header: X-Gitlab-Token
+  algo: shared-secret
+credentials:
+  - name: api
+    kinds: [bearer]
+egress:
+  - from_config: base_url
+    methods: [GET, POST]
+    path_prefixes: ["/api/v4/"]
+config_schema:
+  type: object
+  required: [base_url, projects]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес GitLab
+      description: >-
+        Корень сервера — https://gitlab.com для облака или адрес вашей
+        установки, например https://gitlab.corp.local
+    projects:
+      type: array
+      title: Проекты
+      description: >-
+        В этих проектах бот отвечает на обращения — и только в них он пишет.
+        Формат группа/проект, например acme/api.
+      items:
+        type: string
+        pattern: "^[^\\s]+/[^\\s]+$"
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: Дополнительное имя помимо учётной записи, например buff
+    accept_assignment:
+      type: boolean
+      title: Принимать задачи, назначенные боту
+      description: >-
+        По умолчанию бот берётся за работу только по прямому обращению —
+        упоминанию или команде в комментарии. Назначение задачи на его учётную
+        запись тоже адресовано ему, но случается и по правилам маршрутизации,
+        когда работу заказать никто не хотел. Включайте, если назначение у вас
+        делает человек осознанно.
+tools:
+  - name: search_issues
+    read_only: true
+    summary: Найти задачи и merge request по тексту — когда упомянут номер или нужен контекст из трекера
+  - name: get_issue
+    read_only: true
+    summary: Прочитать задачу или merge request с обсуждением — когда нужны требования или ход обсуждения
+  - name: get_merge_diff
+    read_only: true
+    summary: Прочитать изменения merge request списком diff
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий в задачу или merge request

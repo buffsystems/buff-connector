@@ -1,0 +1,185 @@
+/*
+  Document defaults every Buff interface shares (#561): the surface, the type, the scrollbars
+  and two small type helpers. Layered as `base`, so a utility class still wins.
+*/
+@layer base {
+  /* Native controls, scrollbars and pickers follow the theme too. */
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: var(--border);
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--border);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  /* A single-page app fills the window: its root grows to the full height. */
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* A small uppercase label naming the context above a title or a group. */
+  .ui-eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
+  /* Text roles the screens repeat: a block's title, a secondary sentence, a small hint. */
+  .ui-title {
+    font-size: 1rem;
+    line-height: 1.5rem;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .ui-title--lg {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+  }
+  .ui-title--sm {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  /* A form's or a request's error line, read out when it appears (pair with role="alert"). */
+  .ui-error {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--destructive);
+  }
+  .ui-note {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--muted-foreground);
+  }
+  .ui-hint {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--muted-foreground);
+  }
+
+  /* An inline link in running text or a tile: the brand colour, underlined on hover. */
+  .ui-link {
+    color: var(--primary);
+    text-decoration: none;
+    text-underline-offset: 4px;
+  }
+  .ui-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Digits that line up in a column: tables, metric rows, running balances. */
+  .ui-num {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+  Touch devices: never auto-zoom a focused field. iOS Safari zooms when a focused field's font
+  is under 16px; bump form controls there only, so the desktop stays compact. Unlayered on
+  purpose — it must win over a `text-sm` utility on the same field.
+*/
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes ui-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+/* «In work» halo: a soft radar pulse that expands and fades, not a blinking flash. */
+@keyframes ui-halo {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@keyframes ui-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ui-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+@keyframes ui-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+@keyframes ui-unfold {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+  }
+}
+@keyframes ui-fold {
+  from {
+    height: var(--radix-collapsible-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+@keyframes ui-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+/* A sheet sliding in from an edge: the element sets --ui-slide-from (translateY(100%), …). */
+@keyframes ui-slide-in {
+  from {
+    transform: var(--ui-slide-from);
+  }
+}

@@ -1,0 +1,66 @@
+/*
+  Card (#561): a bordered panel on the card surface.
+  <div class="ui-card"><div class="ui-card__header"><div class="ui-card__title">…</div>
+  <div class="ui-card__description">…</div></div><div class="ui-card__content">…</div>
+  <div class="ui-card__footer">…</div></div>
+  A header with controls for the whole card: the title and description on the left, the
+  controls on the right; when both do not fit side by side, the controls wrap under the text.
+  <div class="ui-card__header ui-card__header--action"><div class="ui-card__heading">
+  <div class="ui-card__title">…</div><div class="ui-card__description">…</div></div>
+  <div class="ui-card__action"><button class="ui-btn …">…</button></div></div>
+*/
+@layer components {
+  .ui-card {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background-color: var(--card);
+    color: var(--card-foreground);
+    padding: 1.25rem 0;
+  }
+  .ui-card__header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    padding: 0 1.5rem;
+  }
+  .ui-card__header--action {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+  }
+  .ui-card__heading {
+    display: flex;
+    flex: 1 1 16rem;
+    flex-direction: column;
+    gap: 0.375rem;
+    min-width: 0;
+  }
+  .ui-card__action {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .ui-card__title {
+    font-weight: 600;
+    line-height: 1;
+  }
+  .ui-card__description {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: var(--muted-foreground);
+  }
+  .ui-card__content {
+    padding: 0 1.5rem;
+  }
+  .ui-card__footer {
+    display: flex;
+    align-items: center;
+    padding: 0 1.5rem;
+  }
+}

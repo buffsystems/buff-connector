@@ -1,0 +1,61 @@
+name: confluence
+version: 1.1.0
+host_api: 1
+publisher: buff
+summary: Confluence — база знаний команды как контекст для ответов и вопросы прямо на странице; Data Center, Server и Cloud
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+# Опрос идёт всегда; вызов от Confluence только будит его. Разбирать полезную
+# нагрузку вебхука мы не беремся, пока не проверили её на живом сервере: событие,
+# разобранное по догадке, приходит не туда, где спросили.
+webhook: wake
+signature:
+  header: X-Hub-Signature
+  algo: hmac-sha256
+credentials:
+  - name: api
+    kinds: [bearer, basic]
+egress:
+  - from_config: base_url
+    methods: [GET, POST]
+    path_prefixes: ["/rest/"]
+config_schema:
+  type: object
+  required: [base_url]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес Confluence
+      description: >-
+        Корень вместе с контекстным путём: https://wiki.corp.local для
+        Data Center и Server, https://ваша-компания.atlassian.net/wiki для Cloud
+    spaces:
+      type: array
+      title: Пространства
+      description: >-
+        Ключи пространств, где работает бот, — и только в них он читает и пишет.
+        Пусто — все пространства, открытые учётной записи бота. Ключ виден в
+        адресе страницы: /spaces/DOC/pages/…
+      items:
+        type: string
+        pattern: "^[^\\s/]+$"
+    mention_alias:
+      type: string
+      title: Как ещё к боту обращаются
+      description: >-
+        Дополнительное имя помимо учётной записи, например buff. В Cloud у
+        учётных записей нет логина, поэтому короткое имя там особенно полезно
+tools:
+  - name: search_pages
+    read_only: true
+    summary: Найти страницы по тексту в отмеченных пространствах — когда ответ может быть уже записан в базе знаний
+  - name: get_page
+    read_only: true
+    summary: Прочитать страницу целиком, вместе с обсуждением — когда нужны требования, регламент или решение
+  - name: get_page_children
+    read_only: true
+    summary: Перечислить дочерние страницы раздела — когда ответ собирается из нескольких страниц
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий на странице

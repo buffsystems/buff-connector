@@ -1,0 +1,22 @@
+name: demo
+version: 1.0.0
+host_api: 1
+publisher: buff
+summary: Demonstration plugin used by the connector's own tests
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+egress:
+  - from_config: base_url
+    methods: [GET]
+config_schema:
+  type: object
+  required: [base_url]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес системы
+tools:
+  - name: echo
+    read_only: true
+    summary: Returns what it was given

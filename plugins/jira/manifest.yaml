@@ -1,0 +1,60 @@
+name: jira
+version: 1.5.0
+host_api: 1
+publisher: buff
+summary: Jira Data Center и Server — задачи, вопросы и ответы прямо в тикетах
+platforms: [linux-x86_64, linux-aarch64]
+entry: main.py
+webhook: deliver
+signature:
+  header: X-Hub-Signature
+  algo: hmac-sha256
+credentials:
+  - name: api
+    kinds: [bearer, basic]
+egress:
+  - from_config: base_url
+    methods: [GET, POST, PUT]
+    path_prefixes: ["/rest/"]
+config_schema:
+  type: object
+  required: [base_url, project_keys]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      title: Адрес Jira
+      description: Корень Jira вместе с контекстным путём, например https://jira.corp.local/jira
+    project_keys:
+      type: array
+      title: Ключи проектов
+      description: В этих проектах бот отвечает на обращения
+      items:
+        type: string
+        pattern: "^[A-Z][A-Z0-9_]+$"
+    mention_alias:
+      type: string
+      title: Как к боту обращаются
+      description: Дополнительное имя помимо учётной записи, например buff
+    accept_assignment:
+      type: boolean
+      title: Принимать тикеты, назначенные боту
+      description: >-
+        По умолчанию бот берётся за работу только по прямому обращению — упоминанию
+        в комментарии. Назначение тикета на его учётную запись тоже адресовано ему,
+        но случается и по правилам маршрутизации, когда работу заказать никто не
+        хотел. Включайте, если назначение у вас делает человек осознанно.
+    username:
+      type: string
+      title: Логин
+      description: Нужен только для старых Jira Server, где ещё нет личных токенов доступа
+tools:
+  - name: search_issues
+    read_only: true
+    summary: Найти тикеты по JQL — когда в задаче упомянут ключ или нужен контекст из трекера
+  - name: get_issue
+    read_only: true
+    summary: Прочитать тикет целиком с комментариями — когда нужен текст требований или обсуждение
+  - name: add_comment
+    read_only: false
+    summary: Написать комментарий в тикет
