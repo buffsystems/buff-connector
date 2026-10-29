@@ -66,6 +66,8 @@ func init() {
 		"настройка: %v":                                               "setup: %v",
 		"настройка коннектора — откройте %s в браузере":               "connector setup — open %s in your browser",
 		"путь к YAML-конфигу":                                         "path to the YAML config file",
+		"путь к YAML-конфигу (нет файла — создаётся)":                 "path to the YAML config file (created if missing)",
+		"конфиг создан: %s (state_dir: %s)\n":                         "config created: %s (state_dir: %s)\n",
 		"одноразовый код привязки из приложения Buff":                 "one-time pairing code from the Buff app",
 		"человеческое имя коннектора (по умолчанию — имя машины)":     "human label for this connector (default: hostname)",
 		"pair требует --config и --code":                              "pair requires --config and --code",

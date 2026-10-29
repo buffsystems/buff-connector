@@ -126,6 +126,8 @@ func init() {
 		"сборка конфига: %w":                                     "marshal config: %w",
 		"запись конфига (каталог только для чтения?): %w":        "write config (is the config directory read-only?): %w",
 		"замена конфига: %w":                                     "replace config: %w",
+		"каталог конфига: %w":                                    "config directory: %w",
+		"создание каталога конфига: %w":                          "create config directory: %w",
 		"задайте ровно одно — %s_env или %s_file":                "exactly one of %s_env or %s_file must be set",
 		"%s_env %s пуст или не задан":                            "%s_env %s is empty or unset",
 		"чтение %s_file: %w":                                     "read %s_file: %w",

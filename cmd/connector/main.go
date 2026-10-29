@@ -163,13 +163,22 @@ func catalogClient(cfgPath string) *catalog.Client {
 
 func cmdPair(args []string) {
 	fs := i18n.Flags("pair")
-	cfgPath := fs.String("config", "", i18n.T("путь к YAML-конфигу"))
+	cfgPath := fs.String("config", "", i18n.T("путь к YAML-конфигу (нет файла — создаётся)"))
 	code := fs.String("code", "", i18n.T("одноразовый код привязки из приложения Buff"))
 	label := fs.String("label", "", i18n.T("человеческое имя коннектора (по умолчанию — имя машины)"))
 	i18n.ParseFlags(fs, args)
 	if *cfgPath == "" || *code == "" {
 		fmt.Fprintln(os.Stderr, i18n.T("pair требует --config и --code"))
 		os.Exit(2)
+	}
+	// A clean machine has no config yet: pairing is the first command, so it
+	// writes the minimal one itself (autonomous-dev/cloud-front#628).
+	created, err := config.CreateIfMissing(*cfgPath)
+	if err != nil {
+		i18n.Fatalf("конфиг: %v", err)
+	}
+	if created != nil {
+		i18n.Printf("конфиг создан: %s (state_dir: %s)\n", *cfgPath, created.StateDir)
 	}
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
