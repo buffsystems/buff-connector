@@ -16,11 +16,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
 
@@ -34,9 +36,11 @@ type Tool struct {
 
 // Tools is the connector's catalogue (agent.MCPSurface serves it).
 type Tools interface {
-	Catalog() []Tool
-	// Instructions: what the connections are and the administrator's notes for the AI.
-	Instructions() string
+	// Catalog is the tools as a model working in l is told about them.
+	Catalog(l i18n.Lang) []Tool
+	// Instructions: what the connections are and the administrator's notes for the AI, in l.
+	Instructions(l i18n.Lang) string
+	// Call runs a tool; ctx carries the call's language (i18n.WithLang) for its answer.
 	Call(ctx context.Context, name string, args json.RawMessage, caller string) (json.RawMessage, error)
 }
 
@@ -59,27 +63,41 @@ type who struct {
 // handshake, and its calls — each for the developer who asked. The connector's tools (#368)
 // and the organisation's knowledge (#371) are two surfaces behind the same door.
 type surface interface {
-	catalog() []Tool
+	catalog(l i18n.Lang) []Tool
 	instructions(ctx context.Context, c caller) string
 	call(ctx context.Context, name string, args json.RawMessage, c caller) (json.RawMessage, error)
 }
 
 // caller is the developer behind one request: their login and token, the headers their
-// Buff Code sent (the work context rides there), and a way to ask them — nil when their
-// client cannot show a form.
+// Buff Code sent (the work context rides there), a way to ask them — nil when their
+// client cannot show a form — and the language they work in: the one their Buff Code
+// names (X-Buff-Lang), else the connector's own. `named` says Buff Code named it, and
+// only then is it passed on to the backend, which otherwise answers in the person's last.
 type caller struct {
 	login, token string
 	header       http.Header
 	ask          askFunc
+	lang         i18n.Lang
+	named        bool
+}
+
+// callerLang is the language of a request to the gateway, and whether the caller named it.
+func callerLang(h http.Header) (i18n.Lang, bool) {
+	if l, ok := i18n.Parse(h.Get(i18n.LangHeader)); ok {
+		return l, true
+	}
+	return i18n.Default(), false
 }
 
 // toolsSurface serves the connector's catalogue (agent.MCPSurface) as it always was.
 type toolsSurface struct{ tools Tools }
 
-func (t toolsSurface) catalog() []Tool                             { return t.tools.Catalog() }
-func (t toolsSurface) instructions(context.Context, caller) string { return t.tools.Instructions() }
+func (t toolsSurface) catalog(l i18n.Lang) []Tool { return t.tools.Catalog(l) }
+func (t toolsSurface) instructions(_ context.Context, c caller) string {
+	return t.tools.Instructions(c.lang)
+}
 func (t toolsSurface) call(ctx context.Context, name string, args json.RawMessage, c caller) (json.RawMessage, error) {
-	return t.tools.Call(ctx, name, args, c.login)
+	return t.tools.Call(i18n.WithLang(ctx, c.lang), name, args, c.login)
 }
 
 type mcpServer struct {
@@ -115,7 +133,8 @@ type rpcRequest struct {
 	Error  json.RawMessage `json:"error,omitempty"`
 }
 
-func rpcError(w http.ResponseWriter, status int, id json.RawMessage, code int, message string) {
+func rpcError(w http.ResponseWriter, l i18n.Lang, status int, id json.RawMessage, code int, message string) {
+	message = i18n.Localize(l, message)
 	writeJSON(w, status, map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": code, "message": message}})
 }
 
@@ -127,14 +146,15 @@ func rpcResult(w http.ResponseWriter, header http.Header, id json.RawMessage, re
 }
 
 func (s *mcpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	lang, named := callerLang(r.Header)
 	token := bearer(r)
 	if token == "" {
-		rpcError(w, http.StatusUnauthorized, nil, -32001, "нужен вход в Buff: токен разработчика в Authorization")
+		rpcError(w, lang, http.StatusUnauthorized, nil, -32001, "нужен вход в Buff: токен разработчика в Authorization")
 		return
 	}
 	login, refusal := s.whoIs(r.Context(), token)
 	if refusal != "" {
-		rpcError(w, http.StatusForbidden, nil, -32001, refusal)
+		rpcError(w, lang, http.StatusForbidden, nil, -32001, refusal)
 		return
 	}
 	switch r.Method {
@@ -148,32 +168,32 @@ func (s *mcpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		// No server-initiated stream: every answer comes back on its own POST.
 		w.Header().Set("Allow", "POST, DELETE")
-		rpcError(w, http.StatusMethodNotAllowed, nil, -32000, "только POST")
+		rpcError(w, lang, http.StatusMethodNotAllowed, nil, -32000, "только POST")
 		return
 	}
 	var req rpcRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || (req.Method == "" && len(req.ID) == 0) {
-		rpcError(w, http.StatusBadRequest, nil, -32700, "тело запроса — не JSON-RPC")
+		rpcError(w, lang, http.StatusBadRequest, nil, -32700, "тело запроса — не JSON-RPC")
 		return
 	}
-	who := caller{login: login, token: token, header: r.Header}
+	who := caller{login: login, token: token, header: r.Header, lang: lang, named: named}
 	if req.Method == "initialize" {
 		s.initialize(r.Context(), w, req, who)
 		return
 	}
 	sessionID := r.Header.Get("Mcp-Session-Id")
 	if sessionID == "" {
-		rpcError(w, http.StatusBadRequest, req.ID, -32600, "сначала initialize: сессия не открыта")
+		rpcError(w, lang, http.StatusBadRequest, req.ID, -32600, "сначала initialize: сессия не открыта")
 		return
 	}
 	// A session this gateway does not know (it restarted, or the session idled out) is 404, as
 	// MCP requires: the client then opens a new one by itself instead of losing its tools.
 	if !s.inSession(sessionID, login) {
-		rpcError(w, http.StatusNotFound, req.ID, -32001, "сессия не найдена — откройте новую (initialize)")
+		rpcError(w, lang, http.StatusNotFound, req.ID, -32001, "сессия не найдена — откройте новую (initialize)")
 		return
 	}
 	if req.Method == "" { // the person's answer to a question a call is waiting on
-		s.deliver(w, sessionID, req)
+		s.deliver(w, lang, sessionID, req)
 		return
 	}
 	if len(req.ID) == 0 { // a notification (notifications/initialized and the like)
@@ -184,11 +204,11 @@ func (s *mcpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "ping":
 		rpcResult(w, nil, req.ID, map[string]any{})
 	case "tools/list":
-		rpcResult(w, nil, req.ID, map[string]any{"tools": s.catalog()})
+		rpcResult(w, nil, req.ID, map[string]any{"tools": s.catalog(lang)})
 	case "tools/call":
 		s.call(r.Context(), w, r, req, who)
 	default:
-		rpcError(w, http.StatusOK, req.ID, -32601, "метод не поддерживается: "+req.Method)
+		rpcError(w, lang, http.StatusOK, req.ID, -32601, fmt.Sprintf("метод не поддерживается: %s", req.Method))
 	}
 }
 
@@ -231,9 +251,9 @@ func (s *mcpServer) inSession(id, login string) bool {
 	return true
 }
 
-func (s *mcpServer) catalog() []map[string]any {
+func (s *mcpServer) catalog(l i18n.Lang) []map[string]any {
 	out := []map[string]any{}
-	for _, t := range s.surface.catalog() {
+	for _, t := range s.surface.catalog(l) {
 		schema := t.InputSchema
 		if len(schema) == 0 {
 			schema = json.RawMessage(`{"type":"object"}`)
@@ -252,7 +272,7 @@ func (s *mcpServer) call(ctx context.Context, w http.ResponseWriter, r *http.Req
 		Arguments json.RawMessage `json:"arguments"`
 	}
 	if err := json.Unmarshal(req.Params, &p); err != nil || p.Name == "" {
-		rpcError(w, http.StatusOK, req.ID, -32602, "нужно имя инструмента")
+		rpcError(w, c.lang, http.StatusOK, req.ID, -32602, "нужно имя инструмента")
 		return
 	}
 	if len(p.Arguments) == 0 {
@@ -269,7 +289,9 @@ func (s *mcpServer) call(ctx context.Context, w http.ResponseWriter, r *http.Req
 	out, err := s.surface.call(ctx, p.Name, p.Arguments, c)
 	if err != nil {
 		// A tool's failure is the model's to read and act on, not a protocol error.
-		result = map[string]any{"content": []any{map[string]any{"type": "text", "text": err.Error()}}, "isError": true}
+		// In the call's language: an error written in Russian deep inside reads in English
+		// to a model working in English.
+		result = map[string]any{"content": []any{map[string]any{"type": "text", "text": i18n.LocalizeError(c.lang, err)}}, "isError": true}
 	} else {
 		result = out
 	}
@@ -316,7 +338,7 @@ func (s *mcpServer) whoIs(ctx context.Context, token string) (string, string) {
 			return cached.login, ""
 		}
 	}
-	return "", "этот коннектор работает для организации " + s.org + ", а вход выполнен в другую"
+	return "", fmt.Sprintf("этот коннектор работает для организации %s, а вход выполнен в другую", s.org)
 }
 
 func (s *mcpServer) ask(ctx context.Context, token string) (who, bool) {

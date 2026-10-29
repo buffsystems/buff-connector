@@ -2,8 +2,12 @@ package plugin
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 const goodManifest = `
@@ -78,7 +82,7 @@ func TestManifestRejectsMissingIdentity(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ParseManifest([]byte(tc.yaml))
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
+			if err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), tc.want) {
 				t.Fatalf("err = %v, want one mentioning %q", err, tc.want)
 			}
 		})
@@ -450,7 +454,7 @@ func TestWebEgressResolvesToAPolicyNotAHost(t *testing.T) {
 func TestWebEgressNamesTheBadEntryAndTheField(t *testing.T) {
 	m, _ := ParseManifest([]byte(webManifest))
 	_, err := m.ResolveEgress(map[string]any{"deny": []any{"https://pastebin.com"}})
-	if err == nil || !strings.Contains(err.Error(), "deny") || !strings.Contains(err.Error(), "scheme") {
+	if err == nil || !strings.Contains(err.Error(), "deny") || !errors.Is(err, problem.New("web_entry_scheme")) {
 		t.Fatalf("err = %v, want the field and the reason", err)
 	}
 	// The form validates the same way, so the operator reads the reason while

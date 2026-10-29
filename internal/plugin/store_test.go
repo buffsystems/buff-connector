@@ -11,6 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // buildBundle makes a signed bundle the way the publisher will.
@@ -180,7 +183,7 @@ func TestMaliciousArchivesAreRefused(t *testing.T) {
 
 			dir := t.TempDir()
 			err := unpack(buf.Bytes(), dir)
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
+			if err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), tc.want) {
 				t.Fatalf("err = %v, want one mentioning %q", err, tc.want)
 			}
 		})
@@ -206,7 +209,7 @@ func TestIntegrityIsRecheckedAfterInstall(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(in.Dir, "main.py"), []byte("print(2)  # tampered"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CheckIntegrity(in); err == nil || !strings.Contains(err.Error(), "modified") {
+	if err := s.CheckIntegrity(in); err == nil || !errors.Is(err, problem.New("plugin_modified")) {
 		t.Fatalf("err = %v, want the tamper to be caught", err)
 	}
 }

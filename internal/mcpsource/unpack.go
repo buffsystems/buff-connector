@@ -22,7 +22,7 @@ import (
 )
 
 // ErrNotArchive means the bytes are not a format the page accepts.
-var ErrNotArchive = errors.New("this is not an archive the connector can unpack (.mcpb, .dxt, .zip, .tar.gz, .tgz)")
+var ErrNotArchive = errors.New("это не архив, который коннектор умеет распаковать (.mcpb, .dxt, .zip, .tar.gz, .tgz)")
 
 // An item is one member of any archive, read into memory before anything is
 // written. Two passes are the point: the top folder can only be stripped once
@@ -88,7 +88,7 @@ func listZip(data []byte) ([]item, error) {
 		}
 		mode := f.Mode()
 		if mode&os.ModeSymlink != 0 || mode&os.ModeType&^os.ModeDir != 0 {
-			return nil, fmt.Errorf("archive member %q is a link or a device, refused", f.Name)
+			return nil, fmt.Errorf("в архиве %q — ссылка или устройство, отказано", f.Name)
 		}
 		if err := checkName(f.Name); err != nil {
 			return nil, err
@@ -136,7 +136,7 @@ func listTar(data []byte, gzipped bool) ([]item, error) {
 		switch h.Typeflag {
 		case tar.TypeReg, tar.TypeDir:
 		default:
-			return nil, fmt.Errorf("archive member %q is a link or a device, refused", h.Name)
+			return nil, fmt.Errorf("в архиве %q — ссылка или устройство, отказано", h.Name)
 		}
 		if err := checkName(h.Name); err != nil {
 			return nil, err
@@ -163,11 +163,11 @@ func noise(name string) bool {
 // checkName refuses a member name that is absolute or climbs out.
 func checkName(name string) error {
 	if strings.HasPrefix(name, "/") || strings.HasPrefix(name, `\`) || filepath.IsAbs(name) {
-		return fmt.Errorf("archive member %q has an absolute path, refused", name)
+		return fmt.Errorf("в архиве у %q абсолютный путь, отказано", name)
 	}
 	for _, part := range strings.Split(strings.ReplaceAll(name, `\`, "/"), "/") {
 		if part == ".." {
-			return fmt.Errorf("archive member %q climbs out of the archive, refused", name)
+			return fmt.Errorf("в архиве %q выходит за пределы архива, отказано", name)
 		}
 	}
 	return nil
@@ -179,7 +179,7 @@ func safeJoin(dest, name string) (string, error) {
 	target := filepath.Join(dest, filepath.FromSlash(name))
 	rel, err := filepath.Rel(dest, target)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("archive member %q would land outside the target directory", name)
+		return "", fmt.Errorf("в архиве %q попал бы за пределы целевого каталога", name)
 	}
 	return target, nil
 }

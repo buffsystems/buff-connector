@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import unittest
+from unittest import mock
 from urllib.parse import parse_qs, unquote, urlparse
 
 HERE = os.path.dirname(__file__)
@@ -535,6 +536,13 @@ class Check(unittest.TestCase):
         self.assertTrue(got["ok"])
         self.assertIn("сервисный аккаунт «buff-bot (buff-bot@acme-project.iam.gserviceaccount.com)»", got["detail"])
         self.assertIn("Бот видит указанную папку или файл.", got["detail"])
+
+    def test_the_check_speaks_the_connectors_language(self):
+        fresh()
+        with mock.patch.dict(os.environ, {"BUFF_LANG": "en"}):
+            detail = main.check()["detail"]
+        self.assertIn("Google Drive, service account “buff-bot (buff-bot@acme-project.iam.gserviceaccount.com)”", detail)
+        self.assertIn("The bot sees the listed folder or file.", detail)
 
     def test_a_persons_account_is_named_as_such(self):
         fresh(user_email=HUMAN_EMAIL, user_name="Пётр Петров")

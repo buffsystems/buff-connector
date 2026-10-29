@@ -7,12 +7,12 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,6 +20,7 @@ import (
 	"github.com/buffsystems/buff-connector/internal/agent"
 	"github.com/buffsystems/buff-connector/internal/catalog"
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
 
@@ -41,6 +42,15 @@ var version = "dev"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.LUTC)
+	args, lang, set, err := takeLang(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, i18n.LocalizeError(i18n.Default(), err))
+		os.Exit(2)
+	}
+	if set {
+		i18n.SetDefault(lang)
+	}
+	os.Args = append(os.Args[:1], args...)
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)
@@ -67,42 +77,72 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage:")
-	fmt.Fprintln(os.Stderr, "  connector setup --config <path> [--addr 127.0.0.1:8765]   # local web UI: providers, tokens, repos, pairing")
-	fmt.Fprintln(os.Stderr, "  connector catalog [show <plugin>] --config <path>        # what can be installed")
-	fmt.Fprintln(os.Stderr, "  connector install <plugin>[@version] --config <path>     # install from the catalogue")
-	fmt.Fprintln(os.Stderr, "  connector instance list|show|set|secret|rm|check|log     # connections, scriptable")
-	fmt.Fprintln(os.Stderr, "  connector run   --config <path> [--admin 127.0.0.1:8765]  # run (optionally serving the local web UI)")
-	fmt.Fprintln(os.Stderr, "  connector pair  --config <path> --code <pairing-code> [--label <name>]")
-	fmt.Fprintln(os.Stderr, "  connector version")
+	fmt.Fprintln(os.Stderr, i18n.T("использование:"))
+	fmt.Fprintln(os.Stderr, i18n.T("  connector setup --config <путь> [--addr 127.0.0.1:8765]   # локальная страница: провайдеры, токены, репозитории, привязка"))
+	fmt.Fprintln(os.Stderr, i18n.T("  connector catalog [show <плагин>] --config <путь>        # что можно поставить"))
+	fmt.Fprintln(os.Stderr, i18n.T("  connector install <плагин>[@версия] --config <путь>     # поставить из каталога"))
+	fmt.Fprintln(os.Stderr, i18n.T("  connector instance list|show|set|secret|rm|check|log     # подключения, для скриптов"))
+	fmt.Fprintln(os.Stderr, i18n.T("  connector run   --config <путь> [--admin 127.0.0.1:8765]  # работа (и, по желанию, локальная страница)"))
+	fmt.Fprintln(os.Stderr, i18n.T("  connector pair  --config <путь> --code <код-привязки> [--label <имя>]"))
+	fmt.Fprintln(os.Stderr, i18n.T("  connector version — версия"))
+	fmt.Fprintln(os.Stderr, "")
+	fmt.Fprintln(os.Stderr, i18n.T("  --lang en|ru  язык вывода (по умолчанию — BUFF_LANG, затем LANGUAGE/LC_ALL/LC_MESSAGES/LANG, иначе русский)"))
+}
+
+// takeLang takes the --lang flag out of the command line wherever it stands,
+// before the command parses its own flags and refuses it as unknown. The
+// language it names outranks BUFF_LANG and the locale.
+func takeLang(args []string) (rest []string, lang i18n.Lang, set bool, err error) {
+	rest = make([]string, 0, len(args))
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		name, value, hasValue := strings.Cut(strings.TrimLeft(a, "-"), "=")
+		if !strings.HasPrefix(a, "-") || name != "lang" {
+			rest = append(rest, a)
+			continue
+		}
+		if !hasValue {
+			if i+1 >= len(args) {
+				return nil, "", false, fmt.Errorf("--lang ждёт значение — en или ru")
+			}
+			i++
+			value = args[i]
+		}
+		l, ok := i18n.Parse(value)
+		if !ok {
+			return nil, "", false, fmt.Errorf("--lang %q — нужно en или ru", value)
+		}
+		lang, set = l, true
+	}
+	return rest, lang, set, nil
 }
 
 // cmdSetup serves ONLY the local web UI (127.0.0.1) — for first-time configuration
 // and pairing, before/without a running agent. Nothing leaves the machine.
 func cmdSetup(args []string) {
-	fs := flag.NewFlagSet("setup", flag.ExitOnError)
-	cfgPath := fs.String("config", "", "path to the YAML config file (created/updated here)")
-	addr := fs.String("addr", defaultAdminAddr, "loopback address for the web UI")
-	cli := fs.Bool("cli", false, "interactive terminal wizard instead of the web UI (for headless hosts)")
-	_ = fs.Parse(args)
+	fs := i18n.Flags("setup")
+	cfgPath := fs.String("config", "", i18n.T("путь к YAML-конфигу (создаётся или обновляется здесь)"))
+	addr := fs.String("addr", defaultAdminAddr, i18n.T("локальный адрес страницы"))
+	cli := fs.Bool("cli", false, i18n.T("мастер в терминале вместо страницы (для машин без браузера)"))
+	i18n.ParseFlags(fs, args)
 	if *cfgPath == "" {
-		fmt.Fprintln(os.Stderr, "setup requires --config")
+		fmt.Fprintln(os.Stderr, i18n.T("setup требует --config"))
 		os.Exit(2)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	if *cli {
 		if err := admin.RunWizard(ctx, *cfgPath, version, agent.Pair, os.Stdin, os.Stdout); err != nil {
-			log.Fatalf("setup: %v", err)
+			i18n.Fatalf("настройка: %v", err)
 		}
 		return
 	}
 	// The URL carries a one-time token: the local surface installs plugin code and
 	// writes secrets, so loopback alone is not a credential.
 	srv := admin.New(*cfgPath, version, agent.Pair)
-	log.Printf("connector setup — open %s in your browser", srv.URL(*addr))
+	i18n.Logf("настройка коннектора — откройте %s в браузере", srv.URL(*addr))
 	if err := srv.Serve(ctx, *addr); err != nil {
-		log.Fatalf("setup: %v", err)
+		i18n.Fatalf("настройка: %v", err)
 	}
 }
 
@@ -122,18 +162,18 @@ func catalogClient(cfgPath string) *catalog.Client {
 }
 
 func cmdPair(args []string) {
-	fs := flag.NewFlagSet("pair", flag.ExitOnError)
-	cfgPath := fs.String("config", "", "path to the YAML config file")
-	code := fs.String("code", "", "one-time pairing code from the Buff app")
-	label := fs.String("label", "", "human label for this connector (default: hostname)")
-	_ = fs.Parse(args)
+	fs := i18n.Flags("pair")
+	cfgPath := fs.String("config", "", i18n.T("путь к YAML-конфигу"))
+	code := fs.String("code", "", i18n.T("одноразовый код привязки из приложения Buff"))
+	label := fs.String("label", "", i18n.T("человеческое имя коннектора (по умолчанию — имя машины)"))
+	i18n.ParseFlags(fs, args)
 	if *cfgPath == "" || *code == "" {
-		fmt.Fprintln(os.Stderr, "pair requires --config and --code")
+		fmt.Fprintln(os.Stderr, i18n.T("pair требует --config и --code"))
 		os.Exit(2)
 	}
 	cfg, err := config.Load(*cfgPath)
 	if err != nil {
-		log.Fatalf("config: %v", err)
+		i18n.Fatalf("конфиг: %v", err)
 	}
 	lbl := *label
 	if lbl == "" {
@@ -142,18 +182,18 @@ func cmdPair(args []string) {
 		}
 	}
 	if err := agent.Pair(cfg, *code, lbl, version); err != nil {
-		log.Fatalf("pair: %v", err)
+		i18n.Fatalf("привязка: %v", err)
 	}
-	fmt.Println("paired — you can now run: connector run --config", *cfgPath)
+	fmt.Println(i18n.T("привязано — теперь можно запустить: connector run --config"), *cfgPath)
 }
 
 func cmdRun(args []string) {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
-	cfgPath := fs.String("config", "", "path to the YAML config file")
-	adminAddr := fs.String("admin", "", "also serve the local web UI on this loopback address (e.g. 127.0.0.1:8765)")
-	_ = fs.Parse(args)
+	fs := i18n.Flags("run")
+	cfgPath := fs.String("config", "", i18n.T("путь к YAML-конфигу"))
+	adminAddr := fs.String("admin", "", i18n.T("заодно открыть локальную страницу на этом адресе (например, 127.0.0.1:8765)"))
+	i18n.ParseFlags(fs, args)
 	if *cfgPath == "" {
-		fmt.Fprintln(os.Stderr, "run requires --config")
+		fmt.Fprintln(os.Stderr, i18n.T("run требует --config"))
 		os.Exit(2)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -175,14 +215,14 @@ func cmdRun(args []string) {
 			if agent.MCP != nil {
 				srv = srv.WithIDE(agent.MCP)
 			}
-			log.Printf("local web UI — open %s", srv.URL(*adminAddr))
+			i18n.Logf("локальная страница — откройте %s", srv.URL(*adminAddr))
 			if err := srv.Serve(ctx, *adminAddr); err != nil {
-				log.Printf("admin server: %v", err)
+				i18n.Logf("локальная страница: %v", err)
 			}
 		}()
 	}
 	if err := agent.Run(ctx, *cfgPath, version); err != nil && err != context.Canceled {
-		log.Fatalf("run: %v", err)
+		i18n.Fatalf("работа: %v", err)
 	}
-	log.Println("connector stopped")
+	log.Println(i18n.T("коннектор остановлен"))
 }

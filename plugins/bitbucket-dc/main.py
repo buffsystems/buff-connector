@@ -33,6 +33,8 @@ import re
 
 from buff_plugin import (
     plural,
+    plural_en,
+    say,
     Event,
     Identity,
     Plugin,
@@ -62,7 +64,8 @@ def api(method: str, path: str, body: dict | None = None):
                       headers={"Content-Type": "application/json"} if body else {},
                       body=json.dumps(body) if body else "")
     if res["status"] >= 400:
-        raise RuntimeError(f"Bitbucket ответил {res['status']} на {path}: {res['body'][:300]}")
+        raise RuntimeError(say(f"Bitbucket ответил {res['status']} на {path}: {res['body'][:300]}",
+                               f"Bitbucket answered {res['status']} to {path}: {res['body'][:300]}"))
     return json.loads(res["body"]) if res["body"].strip() else {}
 
 
@@ -82,7 +85,8 @@ def whoami() -> None:
     res = plugin.http("GET", f"{BASE}/rest/api/1.0/application-properties",
                       credential="api", headers={}, body="")
     if res["status"] >= 400:
-        raise RuntimeError(f"Bitbucket ответил {res['status']} на проверку связи")
+        raise RuntimeError(say(f"Bitbucket ответил {res['status']} на проверку связи",
+                               f"Bitbucket answered {res['status']} to the connection check"))
     name = (res.get("headers") or {}).get("X-Ausername") or \
         (res.get("headers") or {}).get("X-AUSERNAME") or ""
     me["name"] = name
@@ -113,7 +117,8 @@ def split_key(key: str) -> tuple[str, str, str]:
     m = re.fullmatch(r"(?P<repo>[^!@\s]+/[^!@\s]+)(?P<mark>[!@])(?P<ident>[^!@\s]+)",
                      str(key).strip())
     if not m:
-        raise RuntimeError(f"{key} — не адрес обсуждения в Bitbucket (нужно ПРОЕКТ/репозиторий!номер)")
+        raise RuntimeError(say(f"{key} — не адрес обсуждения в Bitbucket (нужно ПРОЕКТ/репозиторий!номер)",
+                               f"{key} is not a Bitbucket discussion address (PROJECT/repository!number is needed)"))
     return m.group("repo"), ("pull" if m.group("mark") == "!" else "commit"), m.group("ident")
 
 
@@ -177,7 +182,7 @@ def comment_text(text: str, link: dict | None, attachment_note: str) -> str:
     an answer mentioning a document nobody can find."""
     parts_ = [text.strip()] if text and text.strip() else []
     if link and link.get("url"):
-        parts_.append(f"[{link.get('title') or 'Открыть в Buff'}]({link['url']})")
+        parts_.append(f"[{link.get('title') or say('Открыть в Buff', 'Open in Buff')}]({link['url']})")
     if attachment_note:
         parts_.append(attachment_note)
     return "\n\n".join(parts_)
@@ -189,9 +194,11 @@ def comment_text(text: str, link: dict | None, attachment_note: str) -> str:
 def check():
     version = api("GET", "/rest/api/1.0/application-properties").get("version", "?")
     whoami()
-    return {"ok": True,
-            "detail": f"Bitbucket {version}, вошли как {me['display'] or me['name'] or '?'}. "
-                      f"Бот работает в {len(scope.allowed)} {plural(len(scope.allowed), 'репозитории', 'репозиториях', 'репозиториях')}."}
+    n = len(scope.allowed)
+    who = me['display'] or me['name'] or '?'
+    return {"ok": True, "detail": say(
+        f"Bitbucket {version}, вошли как {who}. Бот работает в {n} {plural(n, 'репозитории', 'репозиториях', 'репозиториях')}.",
+        f"Bitbucket {version}, signed in as {who}. The bot works in {n} {plural_en(n, 'repository', 'repositories')}.")}
 
 
 @plugin.poll
@@ -251,7 +258,7 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     scope.require(repo)
     project, slug = parts(repo)
     body = comment_text(text, link,
-                        f"Документ: {attachment.get('filename')}" if attachment else "")
+                        say(f"Документ: {attachment.get('filename')}", f"Document: {attachment.get('filename')}") if attachment else "")
     if not body:
         return {"ok": True}
     if kind == "commit":
@@ -263,9 +270,7 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     return {"ok": True}
 
 
-@plugin.tool(description="Найти pull request в подключённых репозиториях по тексту. Использовать, "
-                         "когда упомянут номер или нужен контекст из ревью клиента.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["query"], "additionalProperties": False})
@@ -285,16 +290,14 @@ def search_pulls(query: str = "", limit: int = 20):
     return {"total": len(found), "pulls": found}
 
 
-@plugin.tool(description="Прочитать pull request целиком, вместе с обсуждением. Использовать, когда "
-                         "нужен замысел изменения или ход обсуждения в ревью.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_pull(key: str = ""):
     repo, kind, ident = split_key(key)
     scope.require(repo)
     if kind != "pull":
-        raise RuntimeError(f"{key} — не pull request")
+        raise RuntimeError(say(f"{key} — не pull request", f"{key} is not a pull request"))
     project, slug = parts(repo)
     pull = api("GET", f"/rest/api/1.0/projects/{project}/repos/{slug}/pull-requests/{ident}")
     acts = api("GET", f"/rest/api/1.0/projects/{project}/repos/{slug}"
@@ -313,9 +316,7 @@ def get_pull(key: str = ""):
     }
 
 
-@plugin.tool(description="Прочитать изменения pull request одним diff. Использовать, когда вопрос "
-                         "касается того, что именно меняет этот pull request.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_pull_diff(key: str = ""):
@@ -325,12 +326,11 @@ def get_pull_diff(key: str = ""):
     res = plugin.http("GET", f"{BASE}/rest/api/1.0/projects/{project}/repos/{slug}"
                              f"/pull-requests/{ident}.diff", credential="api", headers={}, body="")
     if res["status"] >= 400:
-        raise RuntimeError(f"Bitbucket ответил {res['status']} на diff {key}")
+        raise RuntimeError(say(f"Bitbucket ответил {res['status']} на diff {key}", f"Bitbucket answered {res['status']} to the diff of {key}"))
     return {"key": key, "diff": res["body"]}
 
 
-@plugin.tool(description="Написать комментарий в pull request.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 HERE = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "sdk"))
@@ -161,10 +162,19 @@ class ToolTests(unittest.TestCase):
         self.assertTrue(res["ok"])
         self.assertIn("Бот видит указанную папку.", res["detail"])
 
+    def test_check_speaks_the_connectors_language(self):
+        with mock.patch.dict(os.environ, {"BUFF_LANG": "en"}):
+            res = self.main.check()
+        self.assertEqual(res["detail"], "The bot sees the listed folder.")
+
     def test_tool_descriptions_name_the_roots(self):
-        for name in ("glob", "grep", "read"):
-            self.assertIn(self.docs, self.main.plugin._tools[name]["description"], name)
-            self.assertTrue(self.main.plugin._tools[name]["read_only"])
+        # In the language of the listing, whichever the model reads (#565).
+        for lang, words in (("ru", "Область подключения: "), ("en", "The connection's area: ")):
+            listed = self.main.plugin._handle("tools/list", {"_meta": {"buff/lang": lang}})["tools"]
+            by_name = {t["name"]: t for t in listed}
+            for name in ("glob", "grep", "read"):
+                self.assertIn(words + self.docs, by_name[name]["description"], (lang, name))
+                self.assertTrue(by_name[name]["annotations"]["readOnlyHint"])
 
 
 if __name__ == "__main__":

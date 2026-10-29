@@ -3,10 +3,11 @@
 package plugin
 
 import (
-	"fmt"
 	"os"
 	"os/exec"
 	"syscall"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // CheckPrivilege decides once whether this process can put a child under another
@@ -18,8 +19,7 @@ func CheckPrivilege() Privilege {
 		return Privilege{CanSwitchUID: true}
 	}
 	return Privilege{
-		Reason: fmt.Sprintf("connector runs as uid %d; plugin isolation needs root or CAP_SETUID "+
-			"(a container started with --user cannot do it either)", os.Geteuid()),
+		Reason: problem.New("no_isolation_uid", os.Geteuid()),
 	}
 }
 
@@ -54,7 +54,7 @@ func chownDir(dir string, uid, gid uint32) error {
 		return nil // nothing to hand over; isolation is refused elsewhere
 	}
 	if err := os.Chown(dir, int(uid), int(gid)); err != nil {
-		return fmt.Errorf("chown %s: %w", dir, err)
+		return problem.Wrap("dir_chown", err, dir)
 	}
 	return nil
 }

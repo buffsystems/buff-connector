@@ -1,10 +1,14 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 func TestNewInstanceIDIsUnambiguousAndUnique(t *testing.T) {
@@ -66,7 +70,7 @@ func TestInstanceValidationGuardsThePlatformFields(t *testing.T) {
 			p := good
 			tc.mut(&p)
 			err := p.validate()
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
+			if err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), tc.want) {
 				t.Fatalf("err = %v, want one naming %q", err, tc.want)
 			}
 		})
@@ -248,7 +252,7 @@ plugins:
 		t.Fatalf("the connector must still start: %v", err)
 	}
 	problems := cfg.InstanceProblems()
-	if len(problems) != 1 || !strings.Contains(problems["J4RD8N1VC6PQY5ZE"], "slug") {
+	if len(problems) != 1 || !errors.Is(problems["J4RD8N1VC6PQY5ZE"], problem.New("instance_slug_taken")) {
 		t.Fatalf("problems = %+v", problems)
 	}
 }
@@ -290,7 +294,7 @@ plugins:
 	if len(problems) != 1 {
 		t.Fatalf("problems = %+v", problems)
 	}
-	reason := problems["J4RD8N1VC6PQY5ZE"]
+	reason := problems["J4RD8N1VC6PQY5ZE"].Error()
 	if !strings.Contains(reason, "Jira прод") {
 		t.Errorf("the reason should name the connection it clashes with, got %q", reason)
 	}

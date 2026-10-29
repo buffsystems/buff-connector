@@ -101,7 +101,7 @@ func (g *gitLab) CreatePR(ctx context.Context, token string, spec PRSpec) (PRRes
 	if isAlreadyExists(resp) {
 		return PRResult{AlreadyExists: true}, nil
 	}
-	return PRResult{}, fmt.Errorf("provider: create MR failed (%d): %s", resp.status, providerMessage(resp.body))
+	return PRResult{}, fmt.Errorf("провайдер — MR не создан (%d): %s", resp.status, providerMessage(resp.body))
 }
 
 func (g *gitLab) ListRepos(ctx context.Context, token string) ([]RepoRef, error) {

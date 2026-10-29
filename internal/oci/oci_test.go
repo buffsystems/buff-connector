@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/oci/ocitest"
 )
 
@@ -41,7 +42,7 @@ func TestBlobThatDoesNotMatchItsDigestIsRefused(t *testing.T) {
 	reg.Corrupt(bundle, []byte("something else entirely"))
 
 	_, _, err := reg.Client().Pull(context.Background(), "buff/plugins/jira", "1.0.0")
-	if err == nil || !strings.Contains(err.Error(), "digest") {
+	if err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), "digest") {
 		t.Fatalf("err = %v, want one naming the digest mismatch", err)
 	}
 }

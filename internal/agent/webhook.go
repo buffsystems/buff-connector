@@ -9,13 +9,13 @@ import (
 	"encoding/hex"
 	"hash"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
 
@@ -302,9 +302,9 @@ func serveWebhooks(ctx context.Context, routes []webhookRoute, wake func(string)
 	for _, addr := range webhookAddrs(routes) {
 		srv := &http.Server{Addr: addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 		go func(s *http.Server) {
-			log.Printf("webhooks: listening on %s", s.Addr)
+			i18n.Logf("вебхуки — слушаю %s", s.Addr)
 			if err := s.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Printf("webhooks on %s: %v", s.Addr, err)
+				i18n.Logf("вебхуки на %s — %v", s.Addr, err)
 			}
 		}(srv)
 		servers = append(servers, srv)

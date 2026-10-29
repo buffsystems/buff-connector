@@ -19,6 +19,8 @@ from __future__ import annotations
 import re
 from html.parser import HTMLParser
 
+from .words import say
+
 _SPACE = re.compile(r"\s+")
 # A bullet or a number with nothing after it: what a macro-generated list leaves
 # behind, and never something a person wrote.
@@ -131,7 +133,7 @@ class _Reader(HTMLParser):
         elif tag == "ri:attachment":
             name = attr.get("ri:filename") or attr.get("filename") or ""
             if name:
-                self.write(f"[изображение: {name}]")
+                self.write(say(f"[изображение: {name}]", f"[image: {name}]"))
         elif tag == "br":
             self.newline()
         elif tag in _BLOCKS:

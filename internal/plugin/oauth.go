@@ -46,7 +46,7 @@ func LoadOAuthSecret(file string) (OAuthSecret, error) {
 func ParseOAuthSecret(b []byte) (OAuthSecret, error) {
 	var s OAuthSecret
 	if err := json.Unmarshal(b, &s); err != nil {
-		return s, fmt.Errorf("the secret is not an OAuth client (client_id and client_secret are needed)")
+		return s, fmt.Errorf("секрет — не клиент OAuth (нужны client_id и client_secret)")
 	}
 	if s.ClientID == "" {
 		var wrapped struct {
@@ -60,7 +60,7 @@ func ParseOAuthSecret(b []byte) (OAuthSecret, error) {
 		case wrapped.Web != nil && wrapped.Web.ClientID != "":
 			s = *wrapped.Web
 		default:
-			return s, fmt.Errorf("the secret is not an OAuth client (client_id and client_secret are needed)")
+			return s, fmt.Errorf("секрет — не клиент OAuth (нужны client_id и client_secret)")
 		}
 	}
 	return s, nil
@@ -88,10 +88,10 @@ func SignedIn(file string) (bool, string) {
 func readSecretFile(file string) ([]byte, error) {
 	b, err := os.ReadFile(file)
 	if err != nil {
-		return nil, fmt.Errorf("read secret: %w", err)
+		return nil, fmt.Errorf("чтение секрета: %w", err)
 	}
 	if strings.TrimSpace(string(b)) == "" {
-		return nil, fmt.Errorf("the secret file is empty")
+		return nil, fmt.Errorf("файл секрета пуст")
 	}
 	return b, nil
 }
@@ -176,7 +176,7 @@ func ExchangeCode(ctx context.Context, spec OAuthSpec, file, code, redirect, ver
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(req)
 	if err != nil {
-		return s, fmt.Errorf("token endpoint: %w", err)
+		return s, fmt.Errorf("адрес выдачи токена: %w", err)
 	}
 	defer resp.Body.Close()
 	var out struct {
@@ -186,14 +186,14 @@ func ExchangeCode(ctx context.Context, spec OAuthSpec, file, code, redirect, ver
 		Description  string `json:"error_description"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return s, fmt.Errorf("token endpoint answered %d without JSON", resp.StatusCode)
+		return s, fmt.Errorf("адрес выдачи токена ответил %d без JSON", resp.StatusCode)
 	}
 	if resp.StatusCode/100 != 2 || out.RefreshToken == "" {
 		reason := strings.TrimSpace(out.Error + " " + out.Description)
 		if reason == "" {
-			reason = fmt.Sprintf("status %d, no refresh_token", resp.StatusCode)
+			reason = fmt.Sprintf("ответ %d без refresh_token", resp.StatusCode)
 		}
-		return s, fmt.Errorf("sign-in failed: %s", reason)
+		return s, fmt.Errorf("вход не выполнен: %s", reason)
 	}
 	s.RefreshToken = out.RefreshToken
 	s.Account = emailOf(out.IDToken)

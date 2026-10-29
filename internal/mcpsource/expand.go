@@ -1,9 +1,10 @@
 package mcpsource
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 var placeholder = regexp.MustCompile(`\$\{([^}]+)\}`)
@@ -22,7 +23,7 @@ func Expand(s string, vars map[string]string) (string, error) {
 		return m
 	})
 	if len(missing) > 0 {
-		return "", fmt.Errorf("no value for %s", strings.Join(missing, ", "))
+		return "", problem.New("placeholder_missing", strings.Join(missing, ", "))
 	}
 	return out, nil
 }

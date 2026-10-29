@@ -1,5 +1,5 @@
 name: confluence
-version: 1.1.0
+version: 1.1.2
 host_api: 1
 publisher: buff
 summary: Confluence — база знаний команды как контекст для ответов и вопросы прямо на странице; Data Center, Server и Cloud

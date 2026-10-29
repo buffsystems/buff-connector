@@ -59,7 +59,7 @@ type assembler struct {
 func (a *assembler) feed(raw []byte) (event, error) {
 	var f frame
 	if err := json.Unmarshal(raw, &f); err != nil {
-		return event{}, fmt.Errorf("parse reply: %w", err)
+		return event{}, fmt.Errorf("разбор ответа: %w", err)
 	}
 	if f.Chunk == nil {
 		return event{kind: evWhole, body: raw}, nil

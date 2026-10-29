@@ -1,0 +1,34 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Confluence — the team’s knowledge base as context for answers, and questions right on
+  the page; Data Center, Server and Cloud
+tools:
+  search_pages: >-
+    Find pages by text in the selected spaces — when the answer may already be written
+    down in the knowledge base
+  get_page: >-
+    Read a whole page together with its discussion — when requirements, a procedure or a
+    decision are needed
+  get_page_children: >-
+    List the child pages of a section — when the answer comes together from several
+    pages
+  add_comment: Write a comment on a page
+config_schema:
+  base_url:
+    title: Confluence address
+    description: >-
+      The root together with the context path: https://wiki.corp.local for Data Center
+      and Server, https://your-company.atlassian.net/wiki for Cloud
+  spaces:
+    title: Spaces
+    description: >-
+      Keys of the spaces where the bot works — and only in them does it read and write.
+      Empty — every space open to the bot's account. The key shows in a page's address:
+      /spaces/DOC/pages/…
+  mention_alias:
+    title: Other name the bot answers to
+    description: >-
+      An extra name besides the account, for example buff. Accounts in Cloud have no
+      login, so a short name is especially useful there

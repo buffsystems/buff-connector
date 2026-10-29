@@ -14,7 +14,7 @@ This is a **snapshot**: each Buff release adds one commit with the source of tha
 - **Fixes, translations and documentation** — via pull request.
 - **Proposals** — an issue marked «proposal»: what you want to do, why, and how it looks to the user. Discuss a large change in an issue first.
 
-Questions about buying Enterprise and commercial ones belong at [buff.systems](https://buff.systems/#contact), not here.
+Questions about buying Enterprise and commercial ones belong at [buff.systems](https://buff.systems/en#contact), not here.
 
 ## Pull requests
 

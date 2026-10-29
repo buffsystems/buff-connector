@@ -1,0 +1,37 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Notion — workspace pages and databases as context for answers; questions in page
+  comments, a research report as a child page
+tools:
+  search_pages: >-
+    Find pages and databases by words in the title — when the answer may already be
+    written down in Notion
+  get_page: >-
+    Read a whole page — as text with headings, lists, tables and code — together with
+    its discussion
+  get_page_children: >-
+    List the nested pages and databases of a section — when the answer comes together
+    from several pages
+  get_database: >-
+    Structure of a database — its data sources and properties with their types
+  query_database: Read database entries, optionally filtered by a property value
+  get_comments: Page discussions — comment threads, who wrote and when
+  add_comment: Write a comment on a page or reply in a discussion thread
+  create_page: Create a page inside one of the connected pages — from markdown
+config_schema:
+  base_url:
+    title: Notion API address
+    description: Usually no need to change it
+  roots:
+    title: Pages and databases
+    description: >-
+      Links or ids of pages and databases — the bot works in them and in everything
+      inside. Empty — everything open to the integration in Notion.
+  mention_alias:
+    title: Other name the bot answers to
+    description: >-
+      A short name besides the integration's name, for example buff. In Notion an
+      integration cannot be mentioned with @, so the bot is addressed by a word in the
+      comment's text

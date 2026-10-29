@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"path"
@@ -8,6 +9,8 @@ import (
 	"strings"
 
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // The manifest is the plugin's contract with the connector and with the operator
@@ -195,7 +198,7 @@ func ParseManifest(b []byte) (*Manifest, error) {
 	dec := yaml.NewDecoder(strings.NewReader(string(b)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&m); err != nil {
-		return nil, fmt.Errorf("manifest: %w", err)
+		return nil, fmt.Errorf("манифест: %w", err)
 	}
 	if err := m.validate(); err != nil {
 		return nil, err
@@ -205,22 +208,22 @@ func ParseManifest(b []byte) (*Manifest, error) {
 
 func (m *Manifest) validate() error {
 	if !nameRe.MatchString(m.Name) {
-		return fmt.Errorf("manifest: name %q must be lowercase letters, digits and dashes", m.Name)
+		return fmt.Errorf("манифест — имя %q из строчных латинских букв, цифр и дефисов", m.Name)
 	}
 	if !versionRe.MatchString(m.Version) {
-		return fmt.Errorf("manifest: version %q must look like 1.2.3", m.Version)
+		return fmt.Errorf("манифест — версия %q должна выглядеть как 1.2.3", m.Version)
 	}
 	if m.HostAPI <= 0 {
-		return fmt.Errorf("manifest: host_api is required and must be positive")
+		return fmt.Errorf("манифест — host_api обязателен и больше нуля")
 	}
 	if m.Entry == "" {
-		return fmt.Errorf("manifest: entry is required")
+		return fmt.Errorf("манифест — нужен entry")
 	}
 	if path.IsAbs(m.Entry) || strings.Contains(m.Entry, "..") || path.Clean(m.Entry) != m.Entry {
-		return fmt.Errorf("manifest: entry %q must stay inside the bundle", m.Entry)
+		return fmt.Errorf("манифест — entry %q должен быть внутри пакета", m.Entry)
 	}
 	if m.PollSeconds < 0 {
-		return fmt.Errorf("manifest: poll_seconds %d must be zero or a number of seconds", m.PollSeconds)
+		return fmt.Errorf("манифест — poll_seconds %d: ноль или число секунд", m.PollSeconds)
 	}
 	if m.Webhook == "" {
 		m.Webhook = WebhookNone
@@ -228,14 +231,14 @@ func (m *Manifest) validate() error {
 	switch m.Webhook {
 	case WebhookNone, WebhookWake, WebhookDeliver:
 	default:
-		return fmt.Errorf("manifest: webhook %q must be none, wake or deliver", m.Webhook)
+		return fmt.Errorf("манифест — webhook %q: none, wake или deliver", m.Webhook)
 	}
 	if m.Signature != nil && m.Signature.SecretFrom != "" {
 		if m.Signature.Header == "" {
-			return fmt.Errorf("manifest: signature.secret_from needs signature.header — the header the source signs in")
+			return fmt.Errorf("манифест — signature.secret_from нужен signature.header, заголовок, в котором источник подписывает")
 		}
 		if m.Signature.Algo != "hmac-sha256" {
-			return fmt.Errorf("manifest: signature.secret_from is implemented for hmac-sha256 only, not %q", m.Signature.Algo)
+			return fmt.Errorf("манифест — signature.secret_from есть только для hmac-sha256, не для %q", m.Signature.Algo)
 		}
 	}
 	for _, c := range m.Creds {
@@ -263,14 +266,14 @@ func (m *Manifest) validate() error {
 // protocol, which setting names the hosts, which ports.
 func (m *Manifest) checkNetwork(rule NetworkRule) error {
 	if rule.Protocol == "" {
-		return fmt.Errorf("manifest: a network rule needs a protocol")
+		return fmt.Errorf("манифест — у сетевого правила нужен протокол")
 	}
 	if len(rule.Ports) == 0 {
-		return fmt.Errorf("manifest: network rule %s needs ports", rule.Protocol)
+		return fmt.Errorf("манифест — у сетевого правила %s нужны порты", rule.Protocol)
 	}
 	if rule.HostsFrom == "" || m.Schema == nil || m.Schema.Properties[rule.HostsFrom] == nil ||
 		m.Schema.Properties[rule.HostsFrom].Type != "array" {
-		return fmt.Errorf("manifest: network rule %s reads %q, which config_schema does not define as a list",
+		return fmt.Errorf("манифест — сетевое правило %s читает %q, а в config_schema это не список",
 			rule.Protocol, rule.HostsFrom)
 	}
 	return nil
@@ -292,18 +295,18 @@ func (m *Manifest) OAuthFor(name string, cfg map[string]any) *OAuthSpec {
 // knows how to attach, and a minted kind says where its tokens come from.
 func (m *Manifest) checkCred(c CredSpec) error {
 	if c.Name == "" {
-		return fmt.Errorf("manifest: a credential needs a name")
+		return fmt.Errorf("манифест — у учётных данных нужно имя")
 	}
 	for _, k := range c.Kinds {
 		if !containsFold(KnownKinds, k) {
-			return fmt.Errorf("manifest: credential %q: kind %q is not one of %s",
+			return fmt.Errorf("манифест — учётные данные %q: вид %q не из %s",
 				c.Name, k, strings.Join(KnownKinds, ", "))
 		}
 		if !Minted(k) {
 			continue
 		}
 		if c.OAuth == nil || len(c.OAuth.Scopes) == 0 {
-			return fmt.Errorf("manifest: credential %q: kind %s needs an oauth block with scopes", c.Name, k)
+			return fmt.Errorf("манифест — учётным данным %q вида %s нужен блок oauth со scopes", c.Name, k)
 		}
 		if err := m.oauthAddress(c, "token_uri", c.OAuth.TokenURI, c.OAuth.TokenURIFrom); err != nil {
 			return err
@@ -322,12 +325,12 @@ func (m *Manifest) checkCred(c CredSpec) error {
 func (m *Manifest) oauthAddress(c CredSpec, what, literal, from string) error {
 	switch {
 	case literal != "" && from != "":
-		return fmt.Errorf("manifest: credential %q: oauth.%s is either written down or taken from a setting, not both", c.Name, what)
+		return fmt.Errorf("манифест — учётные данные %q: oauth.%s либо записан, либо берётся из настройки, не то и другое", c.Name, what)
 	case literal == "" && from == "":
-		return fmt.Errorf("manifest: credential %q: oauth needs %s (or %s_from naming a setting)", c.Name, what, what)
+		return fmt.Errorf("манифест — учётным данным %q для oauth нужен %s (или %s_from с именем настройки)", c.Name, what, what)
 	case from != "":
 		if m.Schema == nil || m.Schema.Properties[from] == nil || m.Schema.Properties[from].Type != "string" {
-			return fmt.Errorf("manifest: credential %q: oauth.%s_from points at %q, which config_schema does not define as a string", c.Name, what, from)
+			return fmt.Errorf("манифест — учётные данные %q: oauth.%s_from указывает на %q, а в config_schema это не строка", c.Name, what, from)
 		}
 	}
 	return nil
@@ -336,20 +339,20 @@ func (m *Manifest) oauthAddress(c CredSpec, what, literal, from string) error {
 func (m *Manifest) checkEgress(rule EgressRule) error {
 	if rule.Web != nil {
 		if rule.FromConfig != "" {
-			return fmt.Errorf("manifest: an egress rule is either a configured host or the web, not both")
+			return fmt.Errorf("манифест — правило выхода в сеть: либо настроенный адрес, либо интернет, не то и другое")
 		}
 		for _, f := range rule.Web.listFields() {
 			if m.Schema == nil || m.Schema.Properties[f] == nil || m.Schema.Properties[f].Type != "array" {
-				return fmt.Errorf("manifest: web rule reads %q, which config_schema does not define as a list", f)
+				return fmt.Errorf("манифест — правило интернета читает %q, а в config_schema это не список", f)
 			}
 		}
 		return nil
 	}
 	if rule.FromConfig == "" {
-		return fmt.Errorf("manifest: an egress rule must name the config field its host comes from")
+		return fmt.Errorf("манифест — правило выхода в сеть должно называть поле настроек, откуда берётся адрес")
 	}
 	if m.Schema == nil || m.Schema.Properties[rule.FromConfig] == nil {
-		return fmt.Errorf("manifest: egress rule points at %q, which config_schema does not define",
+		return fmt.Errorf("манифест — правило выхода в сеть указывает на %q, а в config_schema такого нет",
 			rule.FromConfig)
 	}
 	return nil
@@ -444,11 +447,11 @@ func (m *Manifest) ResolveEgress(cfg map[string]any) ([]ResolvedEgress, error) {
 			if rule.Optional {
 				continue
 			}
-			return nil, fmt.Errorf("egress needs %s, which is not set", rule.FromConfig)
+			return nil, problem.New("egress_setting_missing", rule.FromConfig)
 		}
 		u, err := url.Parse(raw)
 		if err != nil || u.Host == "" {
-			return nil, fmt.Errorf("%s is not a URL the plugin can be limited to: %q", rule.FromConfig, raw)
+			return nil, problem.New("egress_setting_not_url", rule.FromConfig, raw)
 		}
 		out = append(out, ResolvedEgress{
 			Host: u.Host, Methods: rule.Methods,
@@ -506,12 +509,12 @@ func resolveWeb(rule *WebRule, cfg map[string]any) (*WebPolicy, error) {
 	if err != nil {
 		field := rule.AllowFrom
 		switch {
-		case strings.HasPrefix(err.Error(), "deny list"):
+		case errors.Is(err, problem.New("web_deny_list")):
 			field = rule.DenyFrom
-		case strings.HasPrefix(err.Error(), "content types"):
+		case errors.Is(err, problem.New("web_content_type")):
 			field = rule.TypesFrom
 		}
-		return nil, fmt.Errorf("%s: %w", field, err)
+		return nil, problem.Wrap("web_setting", err, field)
 	}
 	return pol, nil
 }

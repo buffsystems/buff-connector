@@ -21,6 +21,8 @@ from urllib.parse import quote
 
 from buff_plugin import (
     plural,
+    plural_en,
+    say,
     Event,
     Identity,
     Plugin,
@@ -57,7 +59,8 @@ def api(method: str, path: str, body: dict | None = None):
                               {"Accept": "application/json"},
                       body=json.dumps(body) if body else "")
     if res["status"] >= 400:
-        raise RuntimeError(f"Jira ответила {res['status']} на {path}: {res['body'][:300]}")
+        raise RuntimeError(say(f"Jira ответила {res['status']} на {path}: {res['body'][:300]}",
+                               f"Jira answered {res['status']} to {path}: {res['body'][:300]}"))
     return json.loads(res["body"]) if res["body"].strip() else {}
 
 
@@ -236,9 +239,11 @@ def search_jql(jql: str, fields: str = "summary,updated", limit: int = 50) -> li
 def check():
     info = api("GET", "/rest/api/3/serverInfo")
     whoami()
-    return {"ok": True,
-            "detail": f"Jira Cloud, вошли как {me['display'] or '?'}. "
-                      f"Бот работает в {len(scope.allowed)} {plural(len(scope.allowed), 'проекте', 'проектах', 'проектах')}."}
+    n = len(scope.allowed)
+    who = me['display'] or '?'
+    return {"ok": True, "detail": say(
+        f"Jira Cloud, вошли как {who}. Бот работает в {n} {plural(n, 'проекте', 'проектах', 'проектах')}.",
+        f"Jira Cloud, signed in as {who}. The bot works in {n} {plural_en(n, 'project', 'projects')}.")}
 
 
 @plugin.poll
@@ -316,12 +321,14 @@ def restricted_reply(issue: str, text: str, link: dict | None, attachment: dict 
     body = to_adf(text.strip()) if text and text.strip() else {"type": "doc", "version": 1, "content": []}
     if link and link.get("url"):
         body["content"].append({"type": "paragraph", "content": [{
-            "type": "text", "text": link.get("title") or "Открыть в Buff",
+            "type": "text", "text": link.get("title") or say("Открыть в Buff", "Open in Buff"),
             "marks": [{"type": "link", "attrs": {"href": link["url"]}}]}]})
     if attachment:
-        body["content"].append({"type": "paragraph", "content": [{"type": "text", "text":
+        body["content"].append({"type": "paragraph", "content": [{"type": "text", "text": say(
             "Документ — в Buff по ссылке: вложения в Jira видны всем, кто видит задачу, "
-            "а вопрос был с ограниченным доступом."}]})
+            "а вопрос был с ограниченным доступом.",
+            "The document is in Buff, by the link: attachments in Jira are seen by everyone who sees "
+            "the issue, and the question had restricted access.")}]})
     if body["content"]:
         api("POST", f"/rest/api/3/issue/{issue}/comment", {"body": body, **restricted})
 
@@ -346,12 +353,11 @@ def upload(issue: str, attachment: dict) -> None:
                                "Content-Type": f"multipart/form-data; boundary={boundary}"},
                       body=body.decode("latin-1"))
     if res["status"] >= 400:
-        raise RuntimeError(f"вложение не принято: {res['status']} {res['body'][:200]}")
+        raise RuntimeError(say(f"вложение не принято: {res['status']} {res['body'][:200]}",
+                               f"the attachment was not accepted: {res['status']} {res['body'][:200]}"))
 
 
-@plugin.tool(description="Найти задачи по JQL. Использовать, когда в задаче упомянут ключ тикета "
-                         "или нужен контекст из трекера клиента.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"jql": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["jql"], "additionalProperties": False})
@@ -364,9 +370,7 @@ def search_issues(jql: str = "", limit: int = 20):
     } for i in issues]}
 
 
-@plugin.tool(description="Прочитать тикет целиком, вместе с комментариями. Использовать, когда нужен "
-                         "текст требований, критерии приёмки или обсуждение в тикете.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_issue(key: str = ""):
@@ -387,8 +391,7 @@ def get_issue(key: str = ""):
     }
 
 
-@plugin.tool(description="Написать комментарий в тикет.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

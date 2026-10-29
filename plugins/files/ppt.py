@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import struct
 
+from buff_plugin import say
 from ole import Compound
 
 _CONTAINERS = {0x03E8, 0x03EE, 0x03F0, 0x0FF0, 0x0FF5, 0x040C, 0xF000, 0xF001, 0xF002, 0xF003, 0xF004,
@@ -45,12 +46,12 @@ def text_of(data: bytes) -> str:
     for n in range(count):
         slide_id, texts = outline[n] if n < len(outline) else (0, [])
         parts = texts + (slides[n] if n < len(slides) else [])
-        out += [f"## Слайд {n + 1}", ""]
+        out += [say(f"## Слайд {n + 1}", f"## Slide {n + 1}"), ""]
         out += [p for p in parts if p.strip()] + [""]
         note = " ".join((notes_list[n] if n < len(notes_list) else []) + notes.get(slide_id, []))
         note = " ".join(w for w in note.split() if w)
         if note:
-            out += [f"Заметки: {note}", ""]
+            out += [say(f"Заметки: {note}", f"Notes: {note}"), ""]
     return "\n".join(out) + "\n"
 
 

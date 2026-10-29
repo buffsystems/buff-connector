@@ -16,6 +16,8 @@ import posixpath
 import re
 from dataclasses import dataclass
 
+from buff_plugin import say
+
 _UNC = re.compile(r"^(?:smb://|\\\\|//)([^\\/]+)(?:[\\/]+(.*))?$", re.I)
 
 
@@ -53,17 +55,19 @@ class Location:
 def parse(raw) -> Location:
     text = str(raw or "").strip()
     if not text:
-        raise ValueError("пустой путь")
+        raise ValueError(say("пустой путь", "an empty path"))
     m = _UNC.match(text)
     if m:
         server, rest = m.group(1).lower(), (m.group(2) or "").replace("\\", "/").strip("/")
         if not rest:
-            raise ValueError(f"{text}: у сетевого пути нужна общая папка — \\\\сервер\\папка")
+            raise ValueError(say(f"{text}: у сетевого пути нужна общая папка — \\\\сервер\\папка",
+                                 f"{text}: a network path needs a share — \\\\server\\share"))
         share, _, inner = rest.partition("/")
         return Location("smb", server, share, posixpath.normpath(inner) if inner else "")
     if text.startswith("/"):
         return Location("local", path=posixpath.normpath(text))
-    raise ValueError(f"{text}: путь должен быть абсолютным (/srv/docs) или сетевым (\\\\сервер\\папка)")
+    raise ValueError(say(f"{text}: путь должен быть абсолютным (/srv/docs) или сетевым (\\\\сервер\\папка)",
+                         f"{text}: the path must be absolute (/srv/docs) or a network one (\\\\server\\share)"))
 
 
 class Area:
@@ -75,7 +79,7 @@ class Area:
             try:
                 self.roots.append(parse(r))
             except ValueError as exc:
-                raise ValueError(f"корень «{r}»: {exc}") from exc
+                raise ValueError(say(f"корень «{r}»: {exc}", f"root “{r}”: {exc}")) from exc
         self.excludes = [str(e).strip() for e in (excludes or []) if str(e or "").strip()]
 
     def contains(self, loc: Location) -> bool:

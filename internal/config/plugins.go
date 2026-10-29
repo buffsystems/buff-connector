@@ -263,52 +263,48 @@ var cyrillicLatin = map[rune]string{
 // checked against its manifest, which this package cannot see.
 func (p *PluginInstance) validate() error {
 	if !idRe.MatchString(p.ID) {
-		return fmt.Errorf("id %q must be 16 Crockford base32 symbols (the connector mints one if you omit it)", p.ID)
+		return fmt.Errorf("id %q — 16 символов Crockford base32 (если его не указать, коннектор выдаст сам)", p.ID)
 	}
 	switch {
 	case p.MCP != nil && (p.Plugin != "" || p.Version != ""):
-		return fmt.Errorf("a connection is either a catalogue plugin or a custom mcp server, not both")
+		return fmt.Errorf("подключение — либо плагин из каталога, либо свой mcp-сервер, не то и другое")
 	case p.MCP != nil:
 		if err := p.MCP.validate(); err != nil {
 			return err
 		}
 	case p.Plugin == "":
-		return fmt.Errorf("plugin is required")
+		return fmt.Errorf("нужен plugin")
 	case p.Version == "":
-		return fmt.Errorf("version is required: an instance is pinned to one version on purpose")
+		return fmt.Errorf("нужна version — подключение намеренно закреплено на одной версии")
 	}
 	if !slugRe.MatchString(p.Slug) {
-		return fmt.Errorf("slug %q must start with a letter and use only lowercase letters, digits and "+
-			"underscores — it becomes part of every tool name the model sees", p.Slug)
+		return fmt.Errorf("slug %q должен начинаться с буквы и состоять из строчных латинских букв, цифр и подчёркиваний — он входит в имя каждого инструмента, которое видит модель", p.Slug)
 	}
 	if p.PollSeconds < 0 {
-		return fmt.Errorf("poll_seconds %d must be zero (the plugin's suggestion) or a number of seconds", p.PollSeconds)
+		return fmt.Errorf("poll_seconds %d — ноль (как предлагает плагин) или число секунд", p.PollSeconds)
 	}
 	if strings.Contains(p.DevProject, "/") {
-		return fmt.Errorf("dev_project %q must be the project's name inside your organisation, "+
-			"without the organisation and without a slash", p.DevProject)
+		return fmt.Errorf("dev_project %q — имя проекта внутри организации, без организации и без косой черты", p.DevProject)
 	}
 	if n := utf8.RuneCountInString(p.AINotes); n > AINotesLimit && !p.AINotesUnbounded {
-		return fmt.Errorf("ai_notes is %d characters, the limit is %d: a long text in the prompt "+
-			"can make the model worse — set ai_notes_unbounded: true to accept that and lift the limit",
+		return fmt.Errorf("в ai_notes %d символов при пределе %d — длинный текст в подсказке может ухудшить работу модели; задайте ai_notes_unbounded: true, чтобы принять это и снять предел",
 			n, AINotesLimit)
 	}
 	seen := map[string]bool{}
 	for _, c := range p.Credentials {
 		if c.Name == "" {
-			return fmt.Errorf("a credential needs a name")
+			return fmt.Errorf("у учётных данных нужно имя")
 		}
 		if p.MCP != nil {
 			if !MCPCredentialKinds[c.Kind] {
-				return fmt.Errorf("credential %q: kind %q is not one a custom server takes (env, secret, header)", c.Name, c.Kind)
+				return fmt.Errorf("учётные данные %q — вид %q свой сервер не принимает (env, secret, header)", c.Name, c.Kind)
 			}
 			if !envNameRe.MatchString(c.Name) {
-				return fmt.Errorf("credential %q: the name of a custom server's secret is an identifier, "+
-					"used as a variable name and a file name", c.Name)
+				return fmt.Errorf("учётные данные %q — имя секрета своего сервера должно быть идентификатором, оно служит именем переменной и файла", c.Name)
 			}
 		}
 		if seen[c.Name] {
-			return fmt.Errorf("duplicate credential %q", c.Name)
+			return fmt.Errorf("учётные данные %q повторяются", c.Name)
 		}
 		seen[c.Name] = true
 	}

@@ -14,7 +14,7 @@
   <a href="https://github.com/buffsystems/buff-connector/releases"><img alt="Release" src="https://img.shields.io/github/v/release/buffsystems/buff-connector?label=release&color=2563eb"></a>
   <a href="https://github.com/buffsystems/buff-connector/pkgs/container/buff-connector"><img alt="Image" src="https://img.shields.io/badge/ghcr.io-buff--connector-2563eb?logo=docker&logoColor=white"></a>
   <a href="LICENSE"><img alt="Licence" src="https://img.shields.io/badge/licence-MIT-64748b"></a>
-  <a href="https://buff.systems/docs/connector"><img alt="Docs" src="https://img.shields.io/badge/docs-buff.systems-0b0d12"></a>
+  <a href="https://buff.systems/en/docs/connector"><img alt="Docs" src="https://img.shields.io/badge/docs-buff.systems-0b0d12"></a>
 </p>
 
 <p align="center">
@@ -23,7 +23,7 @@
   <a href="#install">Install</a> ·
   <a href="#your-own-integrations-inside-the-perimeter">Your own integrations</a> ·
   <a href="#how-it-works">How it works</a> ·
-  <a href="https://buff.systems/docs/connector">Documentation</a> ·
+  <a href="https://buff.systems/en/docs/connector">Documentation</a> ·
   <a href="README.md">Русский</a>
 </p>
 
@@ -39,7 +39,7 @@ The same connector serves every Buff edition — **Community, Enterprise on-prem
 |---|---|
 | **Keys never leave the perimeter** | Tokens for git providers, trackers and wikis, and the agent's own key, live only on the connector's machine. Even integrations do not see them: the connector core builds the authenticated request and attaches the credentials itself. |
 | **Content on demand, read-only** | The model gets only tools marked as read-only; it cannot write to your systems. An answer goes back to the ticket through the connector, on the platform's command — not through a model tool. |
-| **Nothing opens inwards** | Outbound connections only: nothing connects into your network, tracker events are polled — no inbound port needed (a few webhooks are the exception, [see the docs](https://buff.systems/docs/connector/trackers)). |
+| **Nothing opens inwards** | Outbound connections only: nothing connects into your network, tracker events are polled — no inbound port needed (a few webhooks are the exception, [see the docs](https://buff.systems/en/docs/connector/trackers)). |
 | **Your integrations without handing over intellectual property** | Internal systems are plugged in with your own MCP server or an SDK plugin. The code runs on the connector's machine and goes nowhere — the model sees tool descriptions and call results only. |
 | **Git servers behind a firewall** | The git bridge carries repositories that the internet cannot reach, and brings pull requests back — without exposing your git. |
 | **Buff Code through the company** | The developer gateway: engineers' [Buff Code](https://github.com/buffsystems/buff-code) works with the organisation's models, knowledge and connections through the connector — no provider keys on developer machines. |
@@ -95,14 +95,18 @@ docker run -d --name buff-connector \
   ghcr.io/buffsystems/buff-connector:latest
 ```
 
-Mirrors: `registry.buff.systems/buff/connector` for the image and [buff.systems/downloads](https://buff.systems/downloads) for the files. The pairing code comes from the Buff app, section «Connectors»; the rest is set up on the agent's local page. Details: [Install](https://buff.systems/docs/connector/install) and [Local page](https://buff.systems/docs/connector/web-setup).
+Mirrors: `registry.buff.systems/buff/connector` for the image and [buff.systems/en/downloads](https://buff.systems/en/downloads) for the files. The pairing code comes from the Buff app, section «Connectors»; the rest is set up on the agent's local page. Details: [Install](https://buff.systems/en/docs/connector/install) and [Local page](https://buff.systems/en/docs/connector/web-setup).
+
+**Language.** The command line and the local page speak Russian and English. The language comes from the system — `LANGUAGE`, `LC_ALL`, `LC_MESSAGES`, `LANG` (for the page, the browser's languages); when none of them names Russian or English, it is Russian. To set it explicitly: `--lang en` or `BUFF_LANG=en`, and on the page the switch in the header.
+
+The model reads the tools in the language of the work, not the connector's: a Buff run names its language in the request (`lang` in `mcp/list` and `mcp/call`), Buff Code in the `X-Buff-Lang` header, and the tools' descriptions, answers and refusals come in it. A caller that names none gets the connector's language.
 
 ## Your own integrations inside the perimeter
 
 An internal system that is not in the catalogue is plugged in without handing its code or data to us:
 
-- **Your own MCP server** — your vendor's, an open-source one or one your team wrote. Drop an archive (`.mcpb`, Node.js, Python), name a GitHub repository or the address of a remote server on the connector's local page. You decide which of its tools count as read-only. [More](https://buff.systems/docs/connector/custom-mcp).
-- **An SDK plugin** — [`sdk/buff_plugin`](sdk/buff_plugin), Python standard library only: a plugin is an MCP server that holds no credentials and asks the connector to make requests on its behalf; the connector attaches the key, checks the address against the allowlist and journals the call.
+- **Your own MCP server** — your vendor's, an open-source one or one your team wrote. Drop an archive (`.mcpb`, Node.js, Python), name a GitHub repository or the address of a remote server on the connector's local page. You decide which of its tools count as read-only. [More](https://buff.systems/en/docs/connector/custom-mcp).
+- **An SDK plugin** — [`sdk/buff_plugin`](sdk/buff_plugin), Python standard library only: a plugin is an MCP server that holds no credentials and asks the connector to make requests on its behalf; the connector attaches the key, checks the address against the allowlist and journals the call. The English of its catalogue card and settings form sits beside the manifest, in `manifest.en.yaml`. What the model reads — each tool's description and its parameters' — is in `tools.ru.md` and `tools.en.md`: `# tool`, its text below, `## parameter` and its text; adjacent lines join with a space, a blank line starts a new line, `{{name}}` is a value the plugin fills in (`fill`). Publishing refuses a plugin with a tool or a parameter described in one language only. A plugin writes its answers and refusals through `say(ru, en)` — in the call's language.
 
 The integration's code stays on the connector's machine. What reaches the model is tool descriptions and call results — exactly what an answer needs.
 
@@ -128,7 +132,7 @@ The integration's code stays on the connector's machine. What reaches the model 
 - **The catalogue lives in a container registry** — a closed perimeter mirrors it into its own Harbor or Nexus and changes only the address.
 - **Releases are signed** with cosign, the signature is in the public transparency log.
 
-Details: [Isolation and access boundaries](https://buff.systems/docs/connector/isolation) and [Tools and the model](https://buff.systems/docs/connector/tools).
+Details: [Isolation and access boundaries](https://buff.systems/en/docs/connector/isolation) and [Tools and the model](https://buff.systems/en/docs/connector/tools).
 
 ## Building from source
 

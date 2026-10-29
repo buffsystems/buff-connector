@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 type entry struct {
@@ -133,7 +135,7 @@ func TestUnpackSniffsTheFormatWhenTheNameSaysNothing(t *testing.T) {
 	if err := Unpack("download", zipOf(t, entry{name: "a.txt", body: "a"}), dest2); err != nil {
 		t.Fatalf("zip by content: %v", err)
 	}
-	if err := Unpack("notes.txt", []byte("hello"), t.TempDir()); err == nil || !strings.Contains(err.Error(), "archive") {
+	if err := Unpack("notes.txt", []byte("hello"), t.TempDir()); err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), "archive") {
 		t.Fatalf("a non-archive must be refused with the reason: %v", err)
 	}
 }

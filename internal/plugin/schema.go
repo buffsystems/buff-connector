@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // A deliberately small subset of JSON Schema, implemented here rather than
@@ -85,28 +87,27 @@ func (s *Schema) check(path string) error {
 		return nil
 	}
 	for k := range s.Unsupported {
-		return fmt.Errorf("config_schema%s: unsupported keyword %q — the connector validates a "+
-			"documented subset of JSON Schema and refuses what it cannot enforce", path, k)
+		return fmt.Errorf("config_schema%s — ключевое слово %q не поддерживается; коннектор проверяет описанное подмножество JSON Schema и отказывает в том, что не может обеспечить", path, k)
 	}
 	if s.Type == "" {
-		return fmt.Errorf("config_schema%s: type is required", path)
+		return fmt.Errorf("config_schema%s — нужен type", path)
 	}
 	if !supportedTypes[s.Type] {
-		return fmt.Errorf("config_schema%s: unsupported type %q", path, s.Type)
+		return fmt.Errorf("config_schema%s — тип %q не поддерживается", path, s.Type)
 	}
 	if s.Pattern != "" {
 		if _, err := regexp.Compile(s.Pattern); err != nil {
-			return fmt.Errorf("config_schema%s: pattern does not compile: %w", path, err)
+			return fmt.Errorf("config_schema%s — pattern не компилируется: %w", path, err)
 		}
 	}
 	if s.Default != nil {
 		if s.Type == "object" || s.Type == "array" {
-			return fmt.Errorf("config_schema%s: a default is allowed only on a scalar setting", path)
+			return fmt.Errorf("config_schema%s — default допустим только у простой настройки", path)
 		}
 		// A default the setting's own rules would refuse is a form that fails the
 		// moment it is submitted untouched.
 		if err := s.Validate(strings.TrimPrefix(path, "."), s.Default); err != nil {
-			return fmt.Errorf("config_schema%s: the default does not satisfy the setting: %w", path, err)
+			return fmt.Errorf("config_schema%s — default не подходит настройке: %w", path, err)
 		}
 	}
 	for name, sub := range s.Properties {
@@ -127,11 +128,14 @@ func (s *Schema) Validate(path string, v any) error {
 	case "object":
 		m, ok := v.(map[string]any)
 		if !ok {
-			return fmt.Errorf("%s must be an object", label(path))
+			if path == "" {
+				return problem.New("setting_root_not_object")
+			}
+			return problem.New("setting_not_object", path)
 		}
 		for _, req := range s.Required {
 			if _, present := m[req]; !present {
-				return fmt.Errorf("%s is required", label(join(path, req)))
+				return problem.New("setting_required", join(path, req))
 			}
 		}
 		// Sorted so the operator gets the same message every time rather than
@@ -145,7 +149,7 @@ func (s *Schema) Validate(path string, v any) error {
 			val := m[name]
 			sub, known := s.Properties[name]
 			if !known {
-				return fmt.Errorf("%s is not a setting this plugin understands", label(join(path, name)))
+				return problem.New("setting_unknown", join(path, name))
 			}
 			if err := sub.Validate(join(path, name), val); err != nil {
 				return err
@@ -154,7 +158,7 @@ func (s *Schema) Validate(path string, v any) error {
 	case "array":
 		items, ok := v.([]any)
 		if !ok {
-			return fmt.Errorf("%s must be a list", label(path))
+			return problem.New("setting_not_list", path)
 		}
 		for i, item := range items {
 			if err := s.Items.Validate(fmt.Sprintf("%s[%d]", path, i), item); err != nil {
@@ -164,40 +168,40 @@ func (s *Schema) Validate(path string, v any) error {
 	case "string":
 		str, ok := v.(string)
 		if !ok {
-			return fmt.Errorf("%s must be text", label(path))
+			return problem.New("setting_not_text", path)
 		}
 		if s.MinLength != nil && len(str) < *s.MinLength {
-			return fmt.Errorf("%s must be at least %d characters", label(path), *s.MinLength)
+			return problem.New("setting_too_short", path, *s.MinLength)
 		}
 		if s.Pattern != "" {
 			re, err := regexp.Compile(s.Pattern)
 			if err != nil || !re.MatchString(str) {
-				return fmt.Errorf("%s does not match the expected form", label(path))
+				return problem.New("setting_bad_form", path)
 			}
 		}
 		if len(s.Enum) > 0 && !contains(s.Enum, str) {
-			return fmt.Errorf("%s must be one of %s", label(path), strings.Join(s.Enum, ", "))
+			return problem.New("setting_not_in_enum", path, strings.Join(s.Enum, ", "))
 		}
 		if s.Format == "uri" {
 			u, err := url.Parse(str)
 			if err != nil || u.Scheme == "" || u.Host == "" {
-				return fmt.Errorf("%s must be a full URL including https://", label(path))
+				return problem.New("setting_not_url", path)
 			}
 		}
 	case "integer", "number":
 		f, ok := toFloat(v)
 		if !ok {
-			return fmt.Errorf("%s must be a number", label(path))
+			return problem.New("setting_not_number", path)
 		}
 		if s.Minimum != nil && f < *s.Minimum {
-			return fmt.Errorf("%s must be at least %v", label(path), *s.Minimum)
+			return problem.New("setting_below_min", path, *s.Minimum)
 		}
 		if s.Maximum != nil && f > *s.Maximum {
-			return fmt.Errorf("%s must be at most %v", label(path), *s.Maximum)
+			return problem.New("setting_above_max", path, *s.Maximum)
 		}
 	case "boolean":
 		if _, ok := v.(bool); !ok {
-			return fmt.Errorf("%s must be true or false", label(path))
+			return problem.New("setting_not_bool", path)
 		}
 	}
 	return nil
@@ -220,13 +224,6 @@ func join(path, name string) string {
 		return name
 	}
 	return path + "." + name
-}
-
-func label(path string) string {
-	if path == "" {
-		return "the settings"
-	}
-	return path
 }
 
 func contains(list []string, v string) bool {

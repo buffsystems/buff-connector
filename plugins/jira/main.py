@@ -30,6 +30,8 @@ from datetime import datetime, timedelta, timezone
 
 from buff_plugin import (
     plural,
+    plural_en,
+    say,
     Event,
     Identity,
     Plugin,
@@ -53,6 +55,7 @@ scheme = {"kind": "bearer"}
 # How a check names what it reached and how it signed in, in words.
 EDITIONS = {"Server": "Server", "DataCenter": "Data Center"}
 SIGN_IN = {"bearer": "по личному токену", "basic": "по логину и паролю"}
+SIGN_IN_EN = {"bearer": "with a personal token", "basic": "with a login and password"}
 
 # The marked projects ARE the access control — see Scope in the SDK for why the
 # check lives in the function that produces events and binds writes as well.
@@ -78,7 +81,8 @@ def api(method: str, path: str, body: dict | None = None) -> dict:
                       headers={"Content-Type": "application/json"} if body else {},
                       body=json.dumps(body) if body else "")
     if res["status"] >= 400:
-        raise RuntimeError(f"Jira ответила {res['status']} на {path}: {res['body'][:300]}")
+        raise RuntimeError(say(f"Jira ответила {res['status']} на {path}: {res['body'][:300]}",
+                               f"Jira answered {res['status']} to {path}: {res['body'][:300]}"))
     return json.loads(res["body"]) if res["body"] else {}
 
 
@@ -228,10 +232,14 @@ def check():
     whoami()
     reached = " ".join(p for p in ("Jira", EDITIONS.get(scheme.get("deployment", ""), ""), scheme.get("version", "")) if p)
     n = len(scope.allowed)
+    who = me['display'] or me['name']
     return {
         "ok": True,
-        "detail": f"{reached}, вошли как {me['display'] or me['name']} {SIGN_IN[scheme['kind']]}. "
-                  f"Бот работает в {n} {plural(n, 'проекте', 'проектах', 'проектах')}.",
+        "detail": say(
+            f"{reached}, вошли как {who} {SIGN_IN[scheme['kind']]}. "
+            f"Бот работает в {n} {plural(n, 'проекте', 'проектах', 'проектах')}.",
+            f"{reached}, signed in as {who} {SIGN_IN_EN[scheme['kind']]}. "
+            f"The bot works in {n} {plural_en(n, 'project', 'projects')}."),
     }
 
 
@@ -310,7 +318,8 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
                                    "Content-Type": f"multipart/form-data; boundary={boundary}"},
                           body=body.decode("latin-1"))
         if res["status"] >= 400:
-            raise RuntimeError(f"вложение не принято: {res['status']} {res['body'][:200]}")
+            raise RuntimeError(say(f"вложение не принято: {res['status']} {res['body'][:200]}",
+                               f"the attachment was not accepted: {res['status']} {res['body'][:200]}"))
     return {"ok": True}
 
 
@@ -323,18 +332,18 @@ def restricted_reply(issue: str, text: str, link: dict | None, attachment: dict 
     document stays in Buff behind that link rather than on the ticket."""
     parts = [text.strip()] if text and text.strip() else []
     if link and link.get("url"):
-        parts.append(f"[{link.get('title') or 'Открыть в Buff'}|{link['url']}]")
+        parts.append(f"[{link.get('title') or say('Открыть в Buff', 'Open in Buff')}|{link['url']}]")
     if attachment:
-        parts.append("Документ — в Buff по ссылке: вложения в Jira видны всем, кто видит задачу, "
-                     "а вопрос был с ограниченным доступом.")
+        parts.append(say("Документ — в Buff по ссылке: вложения в Jira видны всем, кто видит задачу, "
+                         "а вопрос был с ограниченным доступом.",
+                         "The document is in Buff, by the link: attachments in Jira are seen by everyone who "
+                         "sees the issue, and the question had restricted access."))
     if parts:
         api("POST", f"/rest/api/2/issue/{issue}/comment",
             {"body": "\n\n".join(parts), "visibility": restricted})
 
 
-@plugin.tool(description="Найти тикеты по JQL. Использовать, когда в задаче упомянут ключ тикета "
-                         "или нужен контекст из трекера клиента.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"jql": {"type": "string"},
                                                       "limit": {"type": "integer"}},
                      "required": ["jql"], "additionalProperties": False})
@@ -348,9 +357,7 @@ def search_issues(jql: str = "", limit: int = 20):
     } for i in data.get("issues", [])]}
 
 
-@plugin.tool(description="Прочитать тикет целиком, вместе с комментариями. Использовать, когда нужен "
-                         "текст требований, критерии приёмки или обсуждение в тикете.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_issue(key: str = ""):
@@ -369,8 +376,7 @@ def get_issue(key: str = ""):
     }
 
 
-@plugin.tool(description="Написать комментарий в тикет.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object", "properties": {"key": {"type": "string"},
                                                       "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

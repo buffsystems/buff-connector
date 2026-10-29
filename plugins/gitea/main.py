@@ -27,6 +27,8 @@ from urllib.parse import quote
 
 from buff_plugin import (
     plural,
+    plural_en,
+    say,
     Event,
     Identity,
     Plugin,
@@ -63,7 +65,8 @@ def api(method: str, path: str, body: dict | None = None):
                       headers={"Content-Type": "application/json"} if body else {},
                       body=json.dumps(body) if body else "")
     if res["status"] >= 400:
-        raise RuntimeError(f"Gitea ответила {res['status']} на {path}: {res['body'][:300]}")
+        raise RuntimeError(say(f"Gitea ответила {res['status']} на {path}: {res['body'][:300]}",
+                               f"Gitea answered {res['status']} to {path}: {res['body'][:300]}"))
     return json.loads(res["body"]) if res["body"] else {}
 
 
@@ -88,7 +91,8 @@ def issue_key(repo: str, index: int) -> str:
 def split_key(key: str) -> tuple[str, int]:
     m = re.fullmatch(r"(?P<repo>[^#\s]+/[^#\s]+)#(?P<index>\d+)", str(key).strip())
     if not m:
-        raise RuntimeError(f"{key} — не адрес обсуждения в Gitea (нужно owner/repo#номер)")
+        raise RuntimeError(say(f"{key} — не адрес обсуждения в Gitea (нужно owner/repo#номер)",
+                               f"{key} is not a Gitea discussion address (owner/repo#number is needed)"))
     return m.group("repo"), int(m.group("index"))
 
 
@@ -248,9 +252,9 @@ def comment_body(text: str, link: dict | None, attachment_url: str) -> str:
     """
     parts = [text.strip()] if text and text.strip() else []
     if link and link.get("url"):
-        parts.append(f"[{link.get('title') or 'Открыть в Buff'}]({link['url']})")
+        parts.append(f"[{link.get('title') or say('Открыть в Buff', 'Open in Buff')}]({link['url']})")
     if attachment_url:
-        parts.append(f"Документ: {attachment_url}")
+        parts.append(say(f"Документ: {attachment_url}", f"Document: {attachment_url}"))
     return "\n\n".join(parts)
 
 
@@ -272,7 +276,8 @@ def upload(repo: str, index: int, attachment: dict) -> str:
                       headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
                       body=body.decode("latin-1"))
     if res["status"] >= 400:
-        raise RuntimeError(f"вложение не принято: {res['status']} {res['body'][:200]}")
+        raise RuntimeError(say(f"вложение не принято: {res['status']} {res['body'][:200]}",
+                               f"the attachment was not accepted: {res['status']} {res['body'][:200]}"))
     return str(json.loads(res["body"]).get("browser_download_url", ""))
 
 
@@ -282,9 +287,11 @@ def upload(repo: str, index: int, attachment: dict) -> str:
 def check():
     version = api("GET", "/version").get("version", "?")
     whoami()
-    return {"ok": True,
-            "detail": f"Gitea {version}, вошли как {me['display'] or me['login']}. "
-                      f"Бот работает в {len(scope.allowed)} {plural(len(scope.allowed), 'репозитории', 'репозиториях', 'репозиториях')}."}
+    n = len(scope.allowed)
+    who = me['display'] or me['login']
+    return {"ok": True, "detail": say(
+        f"Gitea {version}, вошли как {who}. Бот работает в {n} {plural(n, 'репозитории', 'репозиториях', 'репозиториях')}.",
+        f"Gitea {version}, signed in as {who}. The bot works in {n} {plural_en(n, 'repository', 'repositories')}.")}
 
 
 @plugin.poll
@@ -359,9 +366,7 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     return {"ok": True}
 
 
-@plugin.tool(description="Найти задачи и pull request в подключённых репозиториях по тексту. "
-                         "Использовать, когда в задаче упомянут номер или нужен контекст из трекера клиента.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["query"], "additionalProperties": False})
@@ -375,9 +380,7 @@ def search_issues(query: str = "", limit: int = 20):
     return {"total": len(found), "issues": found}
 
 
-@plugin.tool(description="Прочитать задачу или pull request целиком, вместе с обсуждением. "
-                         "Использовать, когда нужен текст требований, критерии приёмки или ход обсуждения.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_issue(key: str = ""):
@@ -396,9 +399,7 @@ def get_issue(key: str = ""):
     }
 
 
-@plugin.tool(description="Прочитать изменения pull request одним diff. Использовать, когда вопрос "
-                         "касается того, что именно меняет этот pull request.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_pull_diff(key: str = ""):
@@ -407,12 +408,11 @@ def get_pull_diff(key: str = ""):
     res = plugin.http("GET", f"{BASE}/api/v1/repos/{repo}/pulls/{index}.diff",
                       credential="api", headers={}, body="")
     if res["status"] >= 400:
-        raise RuntimeError(f"Gitea ответила {res['status']} на diff {key}")
+        raise RuntimeError(say(f"Gitea ответила {res['status']} на diff {key}", f"Gitea answered {res['status']} to the diff of {key}"))
     return {"key": key, "diff": res["body"]}
 
 
-@plugin.tool(description="Написать комментарий в задачу или pull request.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

@@ -21,6 +21,7 @@ import (
 
 	"github.com/buffsystems/buff-connector/internal/catalog"
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/identity"
 	"github.com/buffsystems/buff-connector/internal/provider"
 )
@@ -85,14 +86,14 @@ func (s *Server) guard(next http.HandlerFunc) http.HandlerFunc {
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !loopback(r.Host) {
-			http.Error(w, "forbidden host", http.StatusForbidden)
+			http.Error(w, i18n.ForRequest(r).T("чужой адрес"), http.StatusForbidden)
 			return
 		}
 		if r.Method == http.MethodPost && r.Header.Get("X-Buff-Local") != "1" {
-			http.Error(w, "missing local header", http.StatusForbidden)
+			http.Error(w, i18n.ForRequest(r).T("нет локального заголовка"), http.StatusForbidden)
 			return
 		}
-		next(w, r)
+		next(withLang(w, r), r)
 	}
 }
 
@@ -131,6 +132,9 @@ func (s *Server) Serve(ctx context.Context, addr string) error {
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
+	if l := langOf(w); l != i18n.RU {
+		v = localizeJSON(l, v)
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
@@ -214,7 +218,7 @@ type validateReq struct {
 func (s *Server) validate(w http.ResponseWriter, r *http.Request) {
 	var req validateReq
 	if err := readJSON(r, &req); err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	p, err := provider.New(provider.Kind(req.Kind), req.BaseURL, "_/_", nil)
@@ -255,11 +259,11 @@ type saveReq struct {
 func (s *Server) save(w http.ResponseWriter, r *http.Request) {
 	var req saveReq
 	if err := readJSON(r, &req); err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	if req.StateDir == "" {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "state_dir required"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "нужен state_dir"})
 		return
 	}
 	secretsDir := filepath.Join(req.StateDir, "secrets")
@@ -320,12 +324,12 @@ func (s *Server) pairHandler(w http.ResponseWriter, r *http.Request) {
 		Code string `json:"code"`
 	}
 	if err := readJSON(r, &req); err != nil || req.Code == "" {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "code required"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "нужен код"})
 		return
 	}
 	cfg, err := config.Load(s.cfgPath) // strict: providers must be configured + valid first
 	if err != nil {
-		writeJSON(w, 200, map[string]any{"ok": false, "error": "сначала настройте провайдера и сохраните: " + err.Error()})
+		writeJSON(w, 200, map[string]any{"ok": false, "error": fmt.Sprintf("сначала настройте провайдера и сохраните: %v", err)})
 		return
 	}
 	label, _ := os.Hostname()

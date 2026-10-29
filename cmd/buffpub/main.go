@@ -18,8 +18,8 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
-	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -28,12 +28,13 @@ import (
 	"time"
 
 	"github.com/buffsystems/buff-connector/internal/catalog"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: buffpub key|build|index|push|kit")
+		fmt.Fprintln(os.Stderr, i18n.T("использование: buffpub key|build|index|push|kit"))
 		os.Exit(2)
 	}
 	switch os.Args[1] {
@@ -48,7 +49,7 @@ func main() {
 	case "kit":
 		kitCmd(os.Args[2:])
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\n", os.Args[1])
+		i18n.Fprintf(os.Stderr, "неизвестная команда %q\n", os.Args[1])
 		os.Exit(2)
 	}
 }
@@ -58,17 +59,17 @@ func keyCmd() {
 	if err != nil {
 		die(err)
 	}
-	fmt.Printf("public:  %s\nprivate: %s\n",
+	i18n.Printf("открытый: %s\nзакрытый: %s\n",
 		base64.StdEncoding.EncodeToString(pub),
 		base64.StdEncoding.EncodeToString(priv))
 }
 
 func buildCmd(args []string) {
-	flags := flag.NewFlagSet("build", flag.ExitOnError)
-	src := flags.String("src", "", "plugin source directory (must hold manifest.yaml)")
-	sdk := flags.String("sdk", "", "SDK directory to bundle alongside the plugin")
-	out := flags.String("out", "dist", "output directory")
-	_ = flags.Parse(args)
+	flags := i18n.Flags("build")
+	src := flags.String("src", "", i18n.T("каталог исходников плагина (с manifest.yaml)"))
+	sdk := flags.String("sdk", "", i18n.T("каталог SDK, который кладётся в пакет рядом с плагином"))
+	out := flags.String("out", "dist", i18n.T("каталог для результата"))
+	i18n.ParseFlags(flags, args)
 
 	manRaw, err := os.ReadFile(filepath.Join(*src, "manifest.yaml"))
 	if err != nil {
@@ -83,8 +84,25 @@ func buildCmd(args []string) {
 	// model will not know when to reach for.
 	for _, t := range man.Tools {
 		if strings.TrimSpace(t.Summary) == "" {
-			die(fmt.Errorf("tool %s has no summary — the model needs to know when to use it", t.Name))
+			die(fmt.Errorf("у инструмента %s нет описания — модели нужно знать, когда его вызывать", t.Name))
 		}
+	}
+	// The English is optional for a publisher, but when it is there it must fit
+	// the manifest: a half-translated catalogue card is worse than a Russian one.
+	if enRaw, err := os.ReadFile(filepath.Join(*src, plugin.EnglishFile)); err == nil {
+		en, err := plugin.ParseEnglish(enRaw)
+		if err == nil {
+			err = en.Check(man)
+		}
+		if err != nil {
+			die(err)
+		}
+	}
+
+	// What the model is told about the tools, when the plugin words it in files: both
+	// languages, every tool and parameter (#565).
+	if err := plugin.CheckToolTexts(*src, man); err != nil {
+		die(err)
 	}
 
 	bundle, err := tarGz(*src, *sdk)
@@ -102,18 +120,18 @@ func buildCmd(args []string) {
 	if err := os.WriteFile(filepath.Join(*out, name+".sig"), sig, 0o644); err != nil {
 		die(err)
 	}
-	fmt.Printf("%s (%d bytes) signed\n", name, len(bundle))
+	i18n.Printf("%s (%d байт) подписан\n", name, len(bundle))
 }
 
 func indexCmd(args []string) {
-	flags := flag.NewFlagSet("index", flag.ExitOnError)
-	out := flags.String("out", "dist", "directory holding the bundles")
+	flags := i18n.Flags("index")
+	out := flags.String("out", "dist", i18n.T("каталог с пакетами"))
 	// The connector version this catalogue was published with. It travels here
 	// because the catalogue is the one channel a connector already verifies, so
 	// telling an operator their core is behind needs nothing new to trust (#302).
 	// Left out, nothing is claimed — which is what an older publisher produced.
-	conn := flags.String("connector", "", "newest connector version (e.g. v0.7.2)")
-	_ = flags.Parse(args)
+	conn := flags.String("connector", "", i18n.T("новейшая версия коннектора (например, v0.7.2)"))
+	i18n.ParseFlags(flags, args)
 
 	entries := map[string]*catalog.Entry{}
 	err := filepath.WalkDir(*out, func(path string, d fs.DirEntry, err error) error {
@@ -124,14 +142,17 @@ func indexCmd(args []string) {
 		if err != nil {
 			return err
 		}
-		man, err := manifestFromBundle(raw)
+		man, en, err := manifestFromBundle(raw)
 		if err != nil {
 			return fmt.Errorf("%s: %w", path, err)
 		}
 		e, ok := entries[man.Name]
 		if !ok {
 			e = &catalog.Entry{Name: man.Name, Summary: man.Summary, Publisher: man.Publisher,
-				Category: category(man)}
+				Category: category(man), CategoryEN: i18n.EN.T(category(man))}
+			if en != nil {
+				e.SummaryEN = en.Summary
+			}
 			entries[man.Name] = e
 		}
 		v := catalog.Version{
@@ -142,7 +163,11 @@ func indexCmd(args []string) {
 			Platforms: man.Platforms, Webhook: string(man.Webhook),
 		}
 		for _, t := range man.Tools {
-			v.Tools = append(v.Tools, catalog.Tool{Name: t.Name, ReadOnly: t.ReadOnly, Vision: t.Vision, Summary: t.Summary})
+			tool := catalog.Tool{Name: t.Name, ReadOnly: t.ReadOnly, Vision: t.Vision, Summary: t.Summary}
+			if en != nil {
+				tool.SummaryEN = en.Tools[t.Name]
+			}
+			v.Tools = append(v.Tools, tool)
 		}
 		for _, c := range man.Creds {
 			v.Creds = append(v.Creds, c.Name)
@@ -203,7 +228,7 @@ func indexCmd(args []string) {
 	_ = os.WriteFile(filepath.Join(*out, "revocations.json"), rev, 0o644)
 	_ = os.WriteFile(filepath.Join(*out, "revocations.json.sig"), ed25519.Sign(privateKey(), rev), 0o644)
 
-	fmt.Printf("catalog.json: %d plugins, signed\n", len(idx.Plugins))
+	i18n.Printf("catalog.json — плагинов %d, подписан\n", len(idx.Plugins))
 }
 
 func tarGz(src, sdk string) ([]byte, error) {
@@ -257,26 +282,44 @@ type stringWriter struct{ b *strings.Builder }
 
 func (w *stringWriter) Write(p []byte) (int, error) { return w.b.Write(p) }
 
-func manifestFromBundle(raw []byte) (*plugin.Manifest, error) {
+// manifestFromBundle reads a bundle's manifest and, when it carries one, its
+// English (nil for a bundle without).
+func manifestFromBundle(raw []byte) (*plugin.Manifest, *plugin.English, error) {
 	gz, err := gzip.NewReader(strings.NewReader(string(raw)))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer gz.Close()
 	tr := tar.NewReader(gz)
+	var man *plugin.Manifest
+	var en *plugin.English
 	for {
 		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			return nil, fmt.Errorf("no manifest.yaml in bundle")
+			return nil, nil, err
+		}
+		if h.Name != "manifest.yaml" && h.Name != plugin.EnglishFile {
+			continue
+		}
+		body, err := io.ReadAll(tr)
+		if err != nil {
+			return nil, nil, err
 		}
 		if h.Name == "manifest.yaml" {
-			body := make([]byte, h.Size)
-			if _, err := tr.Read(body); err != nil && err.Error() != "EOF" {
-				return nil, err
+			if man, err = plugin.ParseManifest(body); err != nil {
+				return nil, nil, err
 			}
-			return plugin.ParseManifest(body)
+		} else if en, err = plugin.ParseEnglish(body); err != nil {
+			return nil, nil, err
 		}
 	}
+	if man == nil {
+		return nil, nil, fmt.Errorf("в пакете нет manifest.yaml")
+	}
+	return man, en, nil
 }
 
 func category(m *plugin.Manifest) string {
@@ -289,16 +332,16 @@ func category(m *plugin.Manifest) string {
 func privateKey() ed25519.PrivateKey {
 	raw := os.Getenv("BUFF_PUBLISH_KEY")
 	if raw == "" {
-		die(fmt.Errorf("set BUFF_PUBLISH_KEY to the base64 private key (buffpub key)"))
+		die(fmt.Errorf("задайте BUFF_PUBLISH_KEY — закрытый ключ в base64 (buffpub key)"))
 	}
 	b, err := base64.StdEncoding.DecodeString(raw)
 	if err != nil || len(b) != ed25519.PrivateKeySize {
-		die(fmt.Errorf("BUFF_PUBLISH_KEY is not an ed25519 private key"))
+		die(fmt.Errorf("BUFF_PUBLISH_KEY — не закрытый ключ ed25519"))
 	}
 	return ed25519.PrivateKey(b)
 }
 
 func die(err error) {
-	fmt.Fprintln(os.Stderr, err)
+	fmt.Fprintln(os.Stderr, i18n.LocalizeError(i18n.Default(), err))
 	os.Exit(1)
 }

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // replyJob is what to write back into a ticket. Every part is optional, so one
@@ -75,7 +75,7 @@ func runReply(ctx context.Context, link requester, cfg *config.Config, m *Plugin
 	}
 	r := parseReplyJob(job)
 	if err := r.validate(); err != nil {
-		log.Printf("reply job %s refused: %v", jobID, err)
+		i18n.Logf("задание ответа %s отклонено: %v", jobID, err)
 		report("error", err.Error())
 		return
 	}
@@ -84,13 +84,13 @@ func runReply(ctx context.Context, link requester, cfg *config.Config, m *Plugin
 	// anything else is refused rather than guessed at.
 	p, ok := instanceByID(cfg, r.Integration)
 	if !ok {
-		err := fmt.Errorf("this connector does not serve the integration %q", r.Integration)
-		log.Printf("reply job %s: %v", jobID, err)
+		err := fmt.Errorf("этот коннектор не обслуживает интеграцию %q", r.Integration)
+		i18n.Logf("задание ответа %s — %v", jobID, err)
 		report("error", err.Error())
 		return
 	}
 	if err := doPluginReply(ctx, link, m, p, access, jobID, r); err != nil {
-		log.Printf("reply job %s failed: %v", jobID, err)
+		i18n.Logf("задание ответа %s не выполнено: %v", jobID, err)
 		report("error", err.Error())
 		return
 	}
@@ -101,10 +101,10 @@ func runReply(ctx context.Context, link requester, cfg *config.Config, m *Plugin
 // customer's ticket.
 func (r replyJob) validate() error {
 	if r.IssueKey == "" {
-		return fmt.Errorf("no issue to answer in")
+		return fmt.Errorf("нет задачи, в которой отвечать")
 	}
 	if r.Comment == "" && r.LinkURL == "" && !r.HasFile && r.Document == "" {
-		return fmt.Errorf("nothing to say: no comment, no link, no document")
+		return fmt.Errorf("сказать нечего — нет ни комментария, ни ссылки, ни документа")
 	}
 	return nil
 }
@@ -155,20 +155,20 @@ const replyTimeout = 3 * time.Minute
 func doPluginReply(ctx context.Context, link requester, m *PluginManager,
 	p config.PluginInstance, access, jobID string, r replyJob) error {
 	if m == nil {
-		return fmt.Errorf("plugins are not running on this connector")
+		return fmt.Errorf("на этом коннекторе плагины не работают")
 	}
 	inst := m.Instance(p.Slug)
 	if inst == nil {
-		return fmt.Errorf("connection %s is not running", p.Slug)
+		return fmt.Errorf("подключение %s не работает", p.Slug)
 	}
 	if !inst.Info().Replies {
-		return fmt.Errorf("plugin %s cannot write answers back", p.Plugin)
+		return fmt.Errorf("плагин %s не умеет писать ответы", p.Plugin)
 	}
 	var file []byte
 	if r.HasFile {
 		var err error
 		if file, err = downloadBlob(ctx, link, access, jobID); err != nil {
-			return fmt.Errorf("fetch %s: %w", r.FileName, err)
+			return fmt.Errorf("получение %s: %w", r.FileName, err)
 		}
 	}
 	rctx, cancel := context.WithTimeout(ctx, replyTimeout)
@@ -191,7 +191,7 @@ func downloadBlob(ctx context.Context, link requester, access, jobID string) ([]
 		if s, _ := resp["data"].(string); s != "" {
 			raw, err := base64.StdEncoding.DecodeString(s)
 			if err != nil {
-				return nil, fmt.Errorf("decode chunk %d: %w", seq, err)
+				return nil, fmt.Errorf("раскодирование части %d: %w", seq, err)
 			}
 			out = append(out, raw...)
 		}

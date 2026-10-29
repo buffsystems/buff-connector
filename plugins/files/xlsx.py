@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timedelta
 
+from buff_plugin import say
 from ooxml import NS, Package, md_table, tag
 
 _BUILTIN_DATES = {14, 15, 16, 17, 18, 19, 20, 21, 22, 45, 46, 47}
@@ -24,7 +25,7 @@ def text_of(data: bytes, sheet: str = "") -> str:
     if sheet:
         sheets = [(n, p) for n, p in sheets if n == sheet]
         if not sheets:
-            raise KeyError(f"листа «{sheet}» в книге нет")
+            raise KeyError(say(f"листа «{sheet}» в книге нет", f"the workbook has no sheet “{sheet}”"))
     shared = _shared_strings(pkg)
     dates = _date_styles(pkg)
     out: list[str] = []

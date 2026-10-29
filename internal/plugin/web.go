@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/url"
 	"strings"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // A web rule is the egress rule whose destination the MODEL names. Every other
@@ -38,32 +40,32 @@ func ParseDomainPattern(s string) (DomainPattern, error) {
 	raw := strings.TrimSpace(s)
 	entry := strings.ToLower(raw)
 	if entry == "" {
-		return DomainPattern{}, fmt.Errorf("an empty entry")
+		return DomainPattern{}, problem.New("web_entry_empty")
 	}
 	if strings.Contains(entry, "://") {
-		return DomainPattern{}, fmt.Errorf("%q: write the domain without a scheme (example.com, not https://example.com)", raw)
+		return DomainPattern{}, problem.New("web_entry_scheme", raw)
 	}
 	for _, r := range entry {
 		if r > 0x7f {
-			return DomainPattern{}, fmt.Errorf("%q: only ASCII — a look-alike letter is a different domain", raw)
+			return DomainPattern{}, problem.New("web_entry_ascii", raw)
 		}
 		if r == ' ' || r == '\t' {
-			return DomainPattern{}, fmt.Errorf("%q: no whitespace", raw)
+			return DomainPattern{}, problem.New("web_entry_space", raw)
 		}
 	}
 	host, path, _ := strings.Cut(entry, "/")
 	if host == "" || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") {
-		return DomainPattern{}, fmt.Errorf("%q: not a domain", raw)
+		return DomainPattern{}, problem.New("web_entry_not_domain", raw)
 	}
 	if strings.Contains(host, "*") {
-		return DomainPattern{}, fmt.Errorf("%q: no wildcard in the domain — subdomains are included already", raw)
+		return DomainPattern{}, problem.New("web_entry_wildcard", raw)
 	}
 	if strings.Contains(host, ":") {
-		return DomainPattern{}, fmt.Errorf("%q: a rule names a site, not a port", raw)
+		return DomainPattern{}, problem.New("web_entry_port", raw)
 	}
 	for _, r := range host {
 		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '.') {
-			return DomainPattern{}, fmt.Errorf("%q: not a domain", raw)
+			return DomainPattern{}, problem.New("web_entry_not_domain", raw)
 		}
 	}
 	return DomainPattern{Host: host, Segments: segments(path), raw: raw}, nil
@@ -112,15 +114,15 @@ func NewWebPolicy(allow, deny, types []string) (*WebPolicy, error) {
 	pol := &WebPolicy{}
 	var err error
 	if pol.Allow, err = parsePatterns(allow); err != nil {
-		return nil, fmt.Errorf("allow list: %w", err)
+		return nil, problem.Wrap("web_allow_list", err)
 	}
 	if pol.Deny, err = parsePatterns(deny); err != nil {
-		return nil, fmt.Errorf("deny list: %w", err)
+		return nil, problem.Wrap("web_deny_list", err)
 	}
 	for _, t := range types {
 		mt, _, perr := mime.ParseMediaType(strings.TrimSpace(t))
 		if perr != nil || !strings.Contains(mt, "/") {
-			return nil, fmt.Errorf("content types: %q is not a media type (text/html, application/json, text/*)", t)
+			return nil, problem.New("web_content_type", t)
 		}
 		pol.Types = append(pol.Types, strings.ToLower(mt))
 	}
@@ -198,9 +200,9 @@ func (w *WebPolicy) Label() string {
 	}
 	switch {
 	case len(w.Allow) > 0:
-		return "интернет: " + names(w.Allow)
+		return fmt.Sprintf("интернет: %s", names(w.Allow))
 	case len(w.Deny) > 0:
-		return "интернет, кроме: " + names(w.Deny)
+		return fmt.Sprintf("интернет, кроме: %s", names(w.Deny))
 	}
 	return "интернет"
 }

@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"net/http"
 	"os"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // The local admin surface can install plugin code, accept a bundle from a file
@@ -72,7 +74,7 @@ func (s *Server) authorized(r *http.Request) bool {
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.authorized(r) {
-			unauthorized(w)
+			unauthorized(w, r)
 			return
 		}
 		next(w, r)
@@ -81,9 +83,10 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 
 // unauthorized tells the operator WHERE the URL comes from, because the usual
 // reason for landing here is opening the bare address instead of the printed one.
-func unauthorized(w http.ResponseWriter) {
-	http.Error(w, "unauthorized — open the URL the connector printed on start "+
-		"(it carries a one-time token), or send it as the X-Buff-Token header", http.StatusUnauthorized)
+// It answers in the request's language: nothing else on this page has loaded yet.
+func unauthorized(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, i18n.ForRequest(r).T("нет доступа — откройте адрес, который коннектор напечатал при запуске "+
+		"(в нём одноразовый токен), или передайте токен в заголовке X-Buff-Token"), http.StatusUnauthorized)
 }
 
 // root serves the setup page. A token in the query is traded for a cookie and
@@ -96,7 +99,7 @@ func (s *Server) root(w http.ResponseWriter, r *http.Request) {
 	}
 	if t := r.URL.Query().Get("t"); t != "" {
 		if subtle.ConstantTimeCompare([]byte(t), []byte(s.token)) != 1 {
-			unauthorized(w)
+			unauthorized(w, r)
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
@@ -110,9 +113,9 @@ func (s *Server) root(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !s.authorized(r) {
-		unauthorized(w)
+		unauthorized(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write(indexHTML)
+	_, _ = w.Write(pageHTML)
 }

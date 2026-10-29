@@ -19,6 +19,7 @@ import (
 	"github.com/buffsystems/buff-connector/internal/config"
 	"github.com/buffsystems/buff-connector/internal/devgate"
 	"github.com/buffsystems/buff-connector/internal/gitutil"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/identity"
 	"github.com/buffsystems/buff-connector/internal/natslink"
 	"github.com/buffsystems/buff-connector/internal/plugin"
@@ -48,15 +49,15 @@ const (
 func decodeClaims(token string) (map[string]any, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
-		return nil, fmt.Errorf("malformed token")
+		return nil, fmt.Errorf("токен испорчен")
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
-		return nil, fmt.Errorf("decode payload: %w", err)
+		return nil, fmt.Errorf("раскодирование содержимого токена: %w", err)
 	}
 	var m map[string]any
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, fmt.Errorf("parse payload: %w", err)
+		return nil, fmt.Errorf("разбор содержимого токена: %w", err)
 	}
 	return m, nil
 }
@@ -163,7 +164,7 @@ func buildRefreshPayload(id identity.Identity, refresh, version string) (map[str
 	cid, _ := claims["cid"].(string)
 	jti, _ := claims["jti"].(string)
 	if cid == "" || jti == "" {
-		return nil, fmt.Errorf("refresh token missing cid/jti")
+		return nil, fmt.Errorf("в токене обновления нет cid/jti")
 	}
 	sig := id.Sign(identity.PopMessage(cid, jti))
 	return map[string]any{"op": "connector_refresh", "refresh": refresh, "sig": sig, "version": version}, nil
@@ -211,7 +212,7 @@ func pollJobs(ctx context.Context, link requester, cfg *config.Config, m *Plugin
 	resp, err := link.Request(rctx, "data.cmd.connector_jobs", buildJobsPayload(access, version))
 	cancel()
 	if err != nil {
-		log.Printf("poll jobs failed: %v", err)
+		i18n.Logf("не удалось запросить задания: %v", err)
 		return
 	}
 	jobs, _ := resp["jobs"].([]any)
@@ -227,17 +228,17 @@ func pollJobs(ctx context.Context, link requester, cfg *config.Config, m *Plugin
 			if err := runImportJob(ctx, link, cfg, access, job); err != nil {
 				// Logging it is not telling anyone: the customer is watching an
 				// import that would otherwise never finish and never fail.
-				log.Printf("import job %s failed: %v", id, err)
+				i18n.Logf("задание импорта %s не выполнено: %v", id, err)
 				reportJobResult(ctx, link, access, id, "error", "", err.Error())
 			} else {
-				log.Printf("import job %s: bundle uploaded", id)
+				i18n.Logf("задание импорта %s — пакет выгружен", id)
 			}
 		case "publish":
 			runPublishJob(ctx, link, cfg, access, job)
 		case "jira_reply":
 			runReply(ctx, link, cfg, m, access, job)
 		default:
-			log.Printf("job %s: unsupported kind %q (skipped)", id, kind)
+			i18n.Logf("задание %s — вид %q не поддерживается (пропущено)", id, kind)
 		}
 	}
 }
@@ -266,7 +267,7 @@ func runImportJob(ctx context.Context, link requester, cfg *config.Config, acces
 	jobID, _ := job["id"].(string)
 	tok, ok := tokenForJob(cfg, kind, baseURL, repo)
 	if !ok {
-		return fmt.Errorf("no configured token for %s %s", kind, repo)
+		return fmt.Errorf("нет настроенного токена для %s %s", kind, repo)
 	}
 	p, err := provider.New(provider.Kind(kind), baseURL, repo, nil)
 	if err != nil {
@@ -280,11 +281,11 @@ func runImportJob(ctx context.Context, link requester, cfg *config.Config, acces
 
 	mirror := filepath.Join(dir, "repo.git")
 	if err := gitutil.MirrorClone(ctx, p.PushRemoteURL(tok), mirror, p.GitConfig(tok)...); err != nil {
-		return fmt.Errorf("clone: %w", err)
+		return fmt.Errorf("клонирование: %w", err)
 	}
 	bundle := filepath.Join(dir, "repo.bundle")
 	if err := gitutil.BundleAll(ctx, mirror, bundle); err != nil {
-		return fmt.Errorf("bundle: %w", err)
+		return fmt.Errorf("сборка пакета: %w", err)
 	}
 	return transport.ChunkFile(bundle, transport.DefaultChunkSize, func(c transport.Chunk) error {
 		rctx, cancel := context.WithTimeout(ctx, reqTimeout)
@@ -312,7 +313,7 @@ func downloadBundle(ctx context.Context, link requester, access, jobID, outPath 
 		if s, _ := resp["data"].(string); s != "" {
 			raw, err := base64.StdEncoding.DecodeString(s)
 			if err != nil {
-				return fmt.Errorf("decode chunk %d: %w", seq, err)
+				return fmt.Errorf("раскодирование части %d: %w", seq, err)
 			}
 			if _, err := f.Write(raw); err != nil {
 				return err
@@ -331,11 +332,11 @@ func runPublishJob(ctx context.Context, link requester, cfg *config.Config, acce
 	jobID, _ := job["id"].(string)
 	res, err := doPublish(ctx, link, cfg, access, job)
 	if err != nil {
-		log.Printf("publish job %s failed: %v", jobID, err)
+		i18n.Logf("задание публикации %s не выполнено: %v", jobID, err)
 		reportJobResult(ctx, link, access, jobID, "error", "", err.Error())
 		return
 	}
-	log.Printf("publish job %s: PR %s", jobID, res)
+	i18n.Logf("задание публикации %s — PR %s", jobID, res)
 	reportJobResult(ctx, link, access, jobID, "done", res, "")
 }
 
@@ -346,18 +347,18 @@ func doPublish(ctx context.Context, link requester, cfg *config.Config, access s
 	jobID, _ := job["id"].(string)
 	spec, _ := job["spec"].(map[string]any)
 	if spec == nil {
-		return "", fmt.Errorf("publish job missing spec")
+		return "", fmt.Errorf("в задании публикации нет описания")
 	}
 	branch, _ := spec["branch"].(string)
 	target, _ := spec["target"].(string)
 	title, _ := spec["title"].(string)
 	body, _ := spec["body"].(string)
 	if branch == "" || target == "" {
-		return "", fmt.Errorf("publish job missing branch/target")
+		return "", fmt.Errorf("в задании публикации нет ветки или цели")
 	}
 	tok, ok := tokenForJob(cfg, kind, baseURL, repo)
 	if !ok {
-		return "", fmt.Errorf("no configured token for %s %s", kind, repo)
+		return "", fmt.Errorf("нет настроенного токена для %s %s", kind, repo)
 	}
 	p, err := provider.New(provider.Kind(kind), baseURL, repo, nil)
 	if err != nil {
@@ -371,21 +372,21 @@ func doPublish(ctx context.Context, link requester, cfg *config.Config, access s
 
 	bundle := filepath.Join(dir, "publish.bundle")
 	if err := downloadBundle(ctx, link, access, jobID, bundle); err != nil {
-		return "", fmt.Errorf("download: %w", err)
+		return "", fmt.Errorf("скачивание: %w", err)
 	}
 	repoDir := filepath.Join(dir, "repo")
 	if err := gitutil.Clone(ctx, p.PushRemoteURL(tok), repoDir, p.GitConfig(tok)...); err != nil {
-		return "", fmt.Errorf("clone their repo: %w", err)
+		return "", fmt.Errorf("клонирование репозитория заказчика: %w", err)
 	}
 	if err := gitutil.FetchRefspec(ctx, repoDir, bundle, "+refs/heads/"+branch+":refs/heads/"+branch); err != nil {
-		return "", fmt.Errorf("fetch bundle: %w", err)
+		return "", fmt.Errorf("получение пакета: %w", err)
 	}
 	if err := gitutil.Push(ctx, repoDir, "origin", branch, p.GitConfig(tok)...); err != nil {
-		return "", fmt.Errorf("push branch: %w", err)
+		return "", fmt.Errorf("отправка ветки: %w", err)
 	}
 	pr, err := p.CreatePR(ctx, tok, provider.PRSpec{Head: branch, Base: target, Title: title, Body: body})
 	if err != nil {
-		return "", fmt.Errorf("create PR: %w", err)
+		return "", fmt.Errorf("создание PR: %w", err)
 	}
 	return pr.URL, nil
 }
@@ -406,14 +407,14 @@ func Pair(cfg *config.Config, code, label, version string) error {
 	claim["code"] = code
 	resp, err := link.Request(ctx, "data.cmd.connector_claim", claim)
 	if err != nil {
-		return fmt.Errorf("claim: %w", err)
+		return fmt.Errorf("привязка: %w", err)
 	}
 	cid, _ := resp["connector_id"].(string)
 	org, _ := resp["org"].(string)
 	access, _ := resp["access"].(string)
 	refresh, _ := resp["refresh"].(string)
 	if cid == "" || access == "" || refresh == "" {
-		return fmt.Errorf("incomplete claim response")
+		return fmt.Errorf("ответ на привязку неполный")
 	}
 	st := identity.State{
 		Seed:        base64.RawURLEncoding.EncodeToString(id.Seed()),
@@ -426,9 +427,9 @@ func Pair(cfg *config.Config, code, label, version string) error {
 		return err
 	}
 	if _, err := link.Request(ctx, "data.cmd.connector_report", buildReportPayload(access, reposFromConfig(cfg), version)); err != nil {
-		log.Printf("initial report failed (will retry on run): %v", err)
+		i18n.Logf("первый отчёт не отправлен (повторится при запуске): %v", err)
 	}
-	log.Printf("paired: connector %s in org %s", cid, org)
+	i18n.Logf("привязано — коннектор %s в организации %s", cid, org)
 	return nil
 }
 
@@ -461,12 +462,12 @@ var Plugins *PluginManager
 func Run(ctx context.Context, cfgPath, version string) error {
 	cur, err := config.Load(cfgPath)
 	if err != nil {
-		return fmt.Errorf("load config: %w", err)
+		return fmt.Errorf("загрузка конфига: %w", err)
 	}
-	log.Printf("connector %s starting; middleware=%s", version, cur.MiddlewareURL)
+	i18n.Logf("коннектор %s запускается, relay=%s", version, cur.MiddlewareURL)
 	st, err := identity.Load(cur.StateDir)
 	if err != nil {
-		return fmt.Errorf("load state (pair first?): %w", err)
+		return fmt.Errorf("загрузка состояния (коннектор привязан?): %w", err)
 	}
 	id, err := st.Identity()
 	if err != nil {
@@ -475,7 +476,7 @@ func Run(ctx context.Context, cfgPath, version string) error {
 	// The state directory has to be laid out before anything runs under a
 	// plugin's uid — see plugin.PrepareStateDir for what each mode is for.
 	if err := plugin.PrepareStateDir(cur.StateDir); err != nil {
-		return fmt.Errorf("prepare state dir: %w", err)
+		return fmt.Errorf("подготовка каталога состояния: %w", err)
 	}
 	pm := NewPluginManager(ctx, cur.StateDir, plugin.NewStore(cur.StateDir, plugin.TrustedKeys, nil)).
 		WithCatalogue(cachedCatalogue(cur.StateDir))
@@ -483,7 +484,7 @@ func Run(ctx context.Context, cfgPath, version string) error {
 	defer pm.StopAll()
 	pm.Sync(ctx, cur)
 	if priv := pm.Privilege(); !priv.CanSwitchUID && len(cur.Plugins) > 0 {
-		log.Printf("plugins will NOT run: %s", priv.Reason)
+		i18n.Logf("плагины работать НЕ будут — %s", priv.Reason)
 	}
 
 	link, err := natslink.ConnectGuest(cur.MiddlewareURL, reqTimeout)
@@ -512,16 +513,16 @@ func Run(ctx context.Context, cfgPath, version string) error {
 		if cid, _ := claims["cid"].(string); cid != "" {
 			resp, rerr := natslink.Connect(cur.MiddlewareURL, cid, currentToken)
 			if rerr != nil {
-				log.Printf("connector responder: %v (tool calls from runs will not arrive)", rerr)
+				i18n.Logf("ответчик коннектора — %v (вызовы инструментов из прогонов не дойдут)", rerr)
 			} else {
 				defer resp.Close()
 				go func() {
 					own := NewOwnModel(cur.OwnModel.BaseURL, cur.OwnModel.APIKey, nil)
 					if err := resp.Serve(ctx, relayHandler(mcp.Handle, own.Chat)); err != nil {
-						log.Printf("connector responder stopped: %v", err)
+						i18n.Logf("ответчик коннектора остановлен — %v", err)
 					}
 				}()
-				log.Printf("answering tool calls on events.connector.%s.>", cid)
+				i18n.Logf("отвечаю на вызовы инструментов в events.connector.%s.>", cid)
 			}
 		}
 	}
@@ -547,7 +548,7 @@ func Run(ctx context.Context, cfgPath, version string) error {
 		// cabinet stops showing an address that is gone.
 		payload["developer_gateway"] = devgate.Address(gatewaySettings(cur), cur.DeveloperGateway.Host)
 		if _, err := link.Request(rctx, "data.cmd.connector_report", payload); err != nil {
-			log.Printf("report failed: %v", err)
+			i18n.Logf("отчёт не отправлен: %v", err)
 		}
 	}
 	report()
@@ -613,7 +614,7 @@ func Run(ctx context.Context, cfgPath, version string) error {
 			lastMod = fi.ModTime()
 			nc, lerr := config.Load(cfgPath)
 			if lerr != nil {
-				log.Printf("config reload failed (keeping current): %v", lerr)
+				i18n.Logf("конфиг не перечитался (работаю с прежним): %v", lerr)
 				continue
 			}
 			ns := providersSig(nc)
@@ -621,7 +622,7 @@ func Run(ctx context.Context, cfgPath, version string) error {
 				continue
 			}
 			cur, sig = nc, ns
-			log.Printf("config changed — applied live (%d providers, %d integrations)", len(cur.Providers), len(cur.Plugins))
+			i18n.Logf("конфиг изменился — применено на лету (провайдеров %d, интеграций %d)", len(cur.Providers), len(cur.Plugins))
 			// Reconciled per instance: only the connection the operator touched
 			// is restarted.
 			pm.Sync(ctx, cur)
@@ -637,7 +638,7 @@ func Run(ctx context.Context, cfgPath, version string) error {
 		case <-refreshTimer.C:
 			payload, err := buildRefreshPayload(id, refresh, version)
 			if err != nil {
-				log.Printf("build refresh: %v", err)
+				i18n.Logf("подготовка обновления токена: %v", err)
 				refreshTimer.Reset(minRefreshSec * time.Second)
 				continue
 			}
@@ -648,9 +649,9 @@ func Run(ctx context.Context, cfgPath, version string) error {
 				// A revoked connector fails permanently — surface it so the
 				// operator sees the agent stop rather than spin silently.
 				if strings.Contains(err.Error(), "revoked") {
-					return fmt.Errorf("connector revoked — re-pair required")
+					return fmt.Errorf("коннектор отозван — нужна новая привязка")
 				}
-				log.Printf("refresh failed (will retry): %v", err)
+				i18n.Logf("токен не обновился (будет повтор): %v", err)
 				refreshTimer.Reset(30 * time.Second)
 				continue
 			}
@@ -666,7 +667,7 @@ func Run(ctx context.Context, cfgPath, version string) error {
 			}
 			st.Access, st.Refresh = access, refresh
 			if err := identity.Save(cur.StateDir, st); err != nil {
-				log.Printf("persist refreshed tokens: %v", err)
+				i18n.Logf("сохранение обновлённых токенов: %v", err)
 			}
 			refreshTimer.Reset(refreshDelay(access))
 		}

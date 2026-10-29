@@ -79,15 +79,18 @@ func (s *Server) pluginsState(w http.ResponseWriter, r *http.Request) {
 	installed := []map[string]any{}
 	if list, err := s.plugins.Store().List(); err == nil {
 		for _, in := range list {
+			// The summary and the settings form's labels in the page's language,
+			// from the bundle's English when it has one.
+			man := in.ManifestIn(langOf(w))
 			installed = append(installed, map[string]any{
-				"name": in.Manifest.Name, "version": in.Manifest.Version,
-				"summary": in.Manifest.Summary, "publisher": in.Manifest.Publisher,
-				"digest": in.Digest[:12], "host_api": in.Manifest.HostAPI,
-				"schema": in.Manifest.Schema, "credentials": in.Manifest.Creds,
-				"webhook": in.Manifest.Webhook, "signature": in.Manifest.Signature,
+				"name": man.Name, "version": man.Version,
+				"summary": man.Summary, "publisher": man.Publisher,
+				"digest": in.Digest[:12], "host_api": man.HostAPI,
+				"schema": man.Schema, "credentials": man.Creds,
+				"webhook": man.Webhook, "signature": man.Signature,
 				// The plugin's suggested read interval — the form's placeholder,
 				// so the operator sees what "leave empty" will mean.
-				"poll_seconds": in.Manifest.PollSeconds,
+				"poll_seconds": man.PollSeconds,
 			})
 		}
 	}
@@ -107,7 +110,7 @@ func (s *Server) pluginsState(w http.ResponseWriter, r *http.Request) {
 		"webhooks": map[string]any{"listen": cfg.Webhooks.Listen, "host": cfg.Webhooks.Host},
 		// The operator has to know BEFORE installing anything whether this
 		// connector can isolate a plugin at all.
-		"isolation": map[string]any{"available": priv.CanSwitchUID, "reason": priv.Reason},
+		"isolation": map[string]any{"available": priv.CanSwitchUID, "reason": errText(priv.Reason)},
 		"runtime":   map[string]any{"installed": s.plugins.RuntimeInstalled(), "path": s.plugins.Runtime()},
 		"installed": installed,
 		"instances": s.plugins.Reports(),
@@ -204,7 +207,7 @@ func (s *Server) catalogURL() string {
 func (s *Server) catalogList(w http.ResponseWriter, r *http.Request) {
 	if s.catalog == nil {
 		writeJSON(w, 200, map[string]any{"available": false,
-			"error": "no catalogue is configured for this connector"})
+			"error": "у этого коннектора не задан каталог"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -212,12 +215,12 @@ func (s *Server) catalogList(w http.ResponseWriter, r *http.Request) {
 
 	idx, err := s.catalog.Fetch(ctx)
 	if err == nil {
-		writeJSON(w, 200, map[string]any{"available": true, "live": true, "index": idx})
+		writeJSON(w, 200, map[string]any{"available": true, "live": true, "index": idx.InLang(langOf(w))})
 		return
 	}
 	if cached, cErr := s.catalog.Cached(); cErr == nil {
 		writeJSON(w, 200, map[string]any{
-			"available": true, "live": false, "index": cached,
+			"available": true, "live": false, "index": cached.InLang(langOf(w)),
 			"error": "showing the last catalogue read: " + err.Error(),
 		})
 		return
@@ -231,7 +234,7 @@ func (s *Server) pluginInstall(w http.ResponseWriter, r *http.Request) {
 		Version string `json:"version"`
 	}
 	if err := readJSON(r, &req); err != nil || s.catalog == nil || s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
@@ -245,7 +248,7 @@ func (s *Server) pluginInstall(w http.ResponseWriter, r *http.Request) {
 	entry, version, ok := idx.Find(req.Name, req.Version)
 	if !ok {
 		writeJSON(w, 404, map[string]any{"ok": false,
-			"error": fmt.Sprintf("%s %s is not in the catalogue", req.Name, req.Version)})
+			"error": fmt.Sprintf("в каталоге нет %s %s", req.Name, req.Version)})
 		return
 	}
 	bundle, sig, err := s.catalog.Download(ctx, entry.Name, version)
@@ -319,7 +322,7 @@ type instanceReq struct {
 func (s *Server) instanceSave(w http.ResponseWriter, r *http.Request) {
 	var req instanceReq
 	if err := readJSON(r, &req); err != nil || s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	cfg, err := config.LoadLenient(s.cfgPath)
@@ -452,7 +455,7 @@ func (s *Server) instanceDelete(w http.ResponseWriter, r *http.Request) {
 		Fingerprint string `json:"fingerprint"`
 	}
 	if err := readJSON(r, &req); err != nil || s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	cfg, err := config.LoadLenient(s.cfgPath)
@@ -480,7 +483,7 @@ func (s *Server) instanceCheck(w http.ResponseWriter, r *http.Request) {
 		ID string `json:"id"`
 	}
 	if err := readJSON(r, &req); err != nil || s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
@@ -561,4 +564,12 @@ func liveAskers(rules []string) []string {
 		}
 	}
 	return out
+}
+
+// errText is an error's text, "" for none.
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }

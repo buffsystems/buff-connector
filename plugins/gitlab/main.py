@@ -29,6 +29,8 @@ from urllib.parse import quote
 
 from buff_plugin import (
     plural,
+    plural_en,
+    say,
     Event,
     Identity,
     Plugin,
@@ -69,7 +71,8 @@ def api(method: str, path: str, body: dict | None = None):
                       headers={"Content-Type": "application/json"} if body else {},
                       body=json.dumps(body) if body else "")
     if res["status"] >= 400:
-        raise RuntimeError(f"GitLab ответила {res['status']} на {path}: {res['body'][:300]}")
+        raise RuntimeError(say(f"GitLab ответила {res['status']} на {path}: {res['body'][:300]}",
+                               f"GitLab answered {res['status']} to {path}: {res['body'][:300]}"))
     return json.loads(res["body"]) if res["body"] else {}
 
 
@@ -130,7 +133,8 @@ def split_key(key: str) -> tuple[str, str, str]:
     """Reads a key back into the project, what it points at, and which one."""
     m = re.fullmatch(r"(?P<project>.+?)(?P<mark>[#!@])(?P<ident>[^#!@]+)", str(key).strip())
     if not m:
-        raise RuntimeError(f"{key} — не адрес обсуждения в GitLab (нужно группа/проект#номер)")
+        raise RuntimeError(say(f"{key} — не адрес обсуждения в GitLab (нужно группа/проект#номер)",
+                               f"{key} is not a GitLab discussion address (group/project#number is needed)"))
     kinds = {v: k for k, v in NOTEABLE.items()}
     return m.group("project"), kinds[m.group("mark")], m.group("ident")
 
@@ -249,9 +253,9 @@ def note_body(text: str, link: dict | None, attachment_markdown: str) -> str:
     an answer mentioning a document nobody can find."""
     parts = [text.strip()] if text and text.strip() else []
     if link and link.get("url"):
-        parts.append(f"[{link.get('title') or 'Открыть в Buff'}]({link['url']})")
+        parts.append(f"[{link.get('title') or say('Открыть в Buff', 'Open in Buff')}]({link['url']})")
     if attachment_markdown:
-        parts.append(f"Документ: {attachment_markdown}")
+        parts.append(say(f"Документ: {attachment_markdown}", f"Document: {attachment_markdown}"))
     return "\n\n".join(parts)
 
 
@@ -273,7 +277,8 @@ def upload(project: str, attachment: dict) -> str:
                       headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
                       body=body.decode("latin-1"))
     if res["status"] >= 400:
-        raise RuntimeError(f"вложение не принято: {res['status']} {res['body'][:200]}")
+        raise RuntimeError(say(f"вложение не принято: {res['status']} {res['body'][:200]}",
+                               f"the attachment was not accepted: {res['status']} {res['body'][:200]}"))
     return str(json.loads(res["body"]).get("markdown", ""))
 
 
@@ -300,9 +305,11 @@ def notes_field(kind: str) -> str:
 def check():
     version = api("GET", "/version").get("version", "?")
     whoami()
-    return {"ok": True,
-            "detail": f"GitLab {version}, вошли как {me['name'] or me['username']}. "
-                      f"Бот работает в {len(scope.allowed)} {plural(len(scope.allowed), 'проекте', 'проектах', 'проектах')}."}
+    n = len(scope.allowed)
+    who = me['name'] or me['username']
+    return {"ok": True, "detail": say(
+        f"GitLab {version}, вошли как {who}. Бот работает в {n} {plural(n, 'проекте', 'проектах', 'проектах')}.",
+        f"GitLab {version}, signed in as {who}. The bot works in {n} {plural_en(n, 'project', 'projects')}.")}
 
 
 def events_query(since: str | None) -> str:
@@ -404,9 +411,7 @@ def note_payload(kind: str, body: str, visibility: str) -> dict:
     return payload
 
 
-@plugin.tool(description="Найти задачи и merge request в подключённых проектах по тексту. "
-                         "Использовать, когда упомянут номер или нужен контекст из трекера клиента.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["query"], "additionalProperties": False})
@@ -422,9 +427,7 @@ def search_issues(query: str = "", limit: int = 20):
     return {"total": len(found), "issues": found}
 
 
-@plugin.tool(description="Прочитать задачу или merge request целиком, вместе с обсуждением. "
-                         "Использовать, когда нужен текст требований, критерии приёмки или ход обсуждения.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_issue(key: str = ""):
@@ -445,23 +448,20 @@ def get_issue(key: str = ""):
     }
 
 
-@plugin.tool(description="Прочитать изменения merge request одним списком diff. Использовать, когда "
-                         "вопрос касается того, что именно меняет этот merge request.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_merge_diff(key: str = ""):
     project, kind, ident = split_key(key)
     scope.require(project)
     if kind != "MergeRequest":
-        raise RuntimeError(f"{key} — не merge request")
+        raise RuntimeError(say(f"{key} — не merge request", f"{key} is not a merge request"))
     data = api("GET", f"/projects/{enc(project)}/merge_requests/{ident}/changes")
     return {"key": key, "changes": [{"path": c.get("new_path"), "diff": c.get("diff")}
                                     for c in data.get("changes", [])]}
 
 
-@plugin.tool(description="Написать комментарий в задачу или merge request.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

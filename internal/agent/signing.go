@@ -5,9 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"log"
 	"strings"
 
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
 
@@ -31,19 +31,17 @@ func handshakeSecret(body []byte, field string) string {
 func acceptHandshake(stateDir, id, token string) {
 	if plugin.LoadSigningSecret(stateDir, id) == "" {
 		if err := plugin.SaveSigningSecret(stateDir, id, token); err != nil {
-			log.Printf("webhooks: %s: keep the source's signing secret: %v", id, err)
+			i18n.Logf("вебхуки %s — сохранение секрета подписи источника: %v", id, err)
 			return
 		}
-		log.Printf("webhooks: %s: the source introduced its signing secret — confirm the subscription "+
-			"in the source with the token shown on the connection's page", id)
+		i18n.Logf("вебхуки %s — источник прислал секрет подписи; подтвердите подписку в источнике токеном со страницы подключения", id)
 		return
 	}
 	if err := plugin.SavePendingSigningSecret(stateDir, id, token); err != nil {
-		log.Printf("webhooks: %s: keep the source's new signing secret: %v", id, err)
+		i18n.Logf("вебхуки %s — сохранение нового секрета подписи источника: %v", id, err)
 		return
 	}
-	log.Printf("webhooks: %s: the source introduced a NEW signing secret; callbacks are still verified "+
-		"with the current one until the operator accepts the new token on the connection's page", id)
+	i18n.Logf("вебхуки %s — источник прислал НОВЫЙ секрет подписи; вебхуки проверяются прежним, пока администратор не примет новый токен на странице подключения", id)
 }
 
 // sourceSignatureHolds checks a source's own HMAC-SHA256 over the body, written

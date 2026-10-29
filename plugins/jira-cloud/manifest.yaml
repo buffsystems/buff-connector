@@ -1,5 +1,5 @@
 name: jira-cloud
-version: 1.1.0
+version: 1.1.2
 host_api: 1
 publisher: buff
 summary: Jira Cloud — задачи, вопросы и ответы прямо в тикетах atlassian.net

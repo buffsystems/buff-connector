@@ -14,7 +14,7 @@ from __future__ import annotations
 import fnmatch
 import re
 
-from buff_plugin import Plugin, visible
+from buff_plugin import Plugin, english, plural_en, say, visible
 
 import area
 import extract
@@ -27,25 +27,42 @@ LOCAL = store.Local()
 SMB = store.Smb(lambda: plugin.credential("share"))
 
 
+def _area() -> str:
+    """The connection's area, in the words of whoever reads it now — the {{area}} of
+    the tools' descriptions (tools.<lang>.md) and of a refusal."""
+    roots = ", ".join(str(r) for r in AREA.roots) or say("весь диск машины с коннектором",
+                                                         "the whole disk of the connector's machine")
+    if not AREA.excludes:
+        return roots
+    excluded = ", ".join(AREA.excludes)
+    return roots + say(f"; исключены: {excluded}", f"; excluded: {excluded}")
+
+
 def _where() -> str:
-    roots = ", ".join(str(r) for r in AREA.roots) or "весь диск машины с коннектором"
-    ex = f"; исключены: {', '.join(AREA.excludes)}" if AREA.excludes else ""
-    return (f"Это папки КОМПАНИИ на диске и сетевых папках клиента — не репозиторий проекта. "
-            f"Область подключения: {roots}{ex}.")
+    return say(f"Это папки КОМПАНИИ на диске и сетевых папках клиента — не репозиторий проекта. "
+               f"Область подключения: {_area()}.",
+               f"These are the COMPANY's folders on the client's disk and network shares — not the "
+               f"project's repository. The connection's area: {_area()}.")
 
 
 def store_for(loc: area.Location):
     return SMB if loc.kind == "smb" else LOCAL
 
 
-def resolve(raw, what: str = "путь") -> area.Location:
+# What a path names, for a refusal: (Russian, English).
+PATH, FOLDER, FILE = ("путь", "the path"), ("папка", "the folder"), ("файл", "the file")
+
+
+def resolve(raw, what: tuple[str, str] = PATH) -> area.Location:
     loc = area.parse(raw)
     if loc.kind == "local":
         real = LOCAL.realpath(loc)
         if real.path != loc.path and not AREA.contains(real):
-            raise ValueError(f"{what} {loc} ведёт по ссылке в {real} — вне области. {_where()}")
+            raise ValueError(say(f"{what[0]} {loc} ведёт по ссылке в {real} — вне области. {_where()}",
+                                 f"{what[1]} {loc} leads by a link to {real} — outside the area. {_where()}"))
     if not AREA.contains(loc):
-        raise ValueError(f"{what} {loc} — вне области подключения. {_where()}")
+        raise ValueError(say(f"{what[0]} {loc} — вне области подключения. {_where()}",
+                             f"{what[1]} {loc} is outside the connection's area. {_where()}"))
     return loc
 
 
@@ -54,7 +71,7 @@ def _skip(loc: area.Location, entry: store.Entry) -> bool:
 
 
 def _starts(path) -> list[area.Location]:
-    return [resolve(path, "папка")] if str(path or "").strip() else AREA.starting_points()
+    return [resolve(path, FOLDER)] if str(path or "").strip() else AREA.starting_points()
 
 
 def _glob_re(pattern: str) -> re.Pattern:
@@ -81,18 +98,14 @@ def _glob_re(pattern: str) -> re.Pattern:
     return re.compile("^" + out + "$")
 
 
-@plugin.tool(description=f"Найти файлы по имени — шаблон вида \"*.docx\", \"**/*.xlsx\", \"договор*\" (регистр не важен). "
-                         "Без path ищет по всей области, с path — в этой папке и вложенных. Возвращает пути, "
-                         "новые сначала. Использовать, когда нужен файл по имени или расширению; содержимое ищет grep. "
-                         f"{_where()}",
-             read_only=True,
+@plugin.tool(read_only=True, fill={"area": _area},
              schema={"type": "object", "properties": {
-                 "pattern": {"type": "string", "description": "Шаблон имени: * ? и ** для вложенных папок"},
-                 "path": {"type": "string", "description": "Папка, в которой искать; пусто — вся область"}},
+                 "pattern": {"type": "string"},
+                 "path": {"type": "string"}},
                  "required": ["pattern"]})
 def glob(pattern: str = "", path: str = ""):
     if not str(pattern or "").strip():
-        raise ValueError("нужен шаблон имени, например *.docx")
+        raise ValueError(say("нужен шаблон имени, например *.docx", "a name pattern is needed, for example *.docx"))
     pattern = str(pattern).replace("\\", "/")
     by_name = "/" not in pattern
     rx = _glob_re(pattern.lower())
@@ -106,30 +119,24 @@ def glob(pattern: str = "", path: str = ""):
             if rx.match(subject.lower()):
                 found.append((entry.mtime, str(loc)))
     if not found:
-        return "Файлы не найдены"
+        return say("Файлы не найдены", "No files found")
     found.sort(key=lambda t: (-t[0], t[1]))
     return "\n".join(p for _, p in found)
 
 
-@plugin.tool(description="Найти по содержимому — регулярное выражение по тексту файлов области (регистр не важен): "
-                         "документы Word, таблицы Excel, презентации PowerPoint (и старые .doc/.xls/.ppt), PDF и "
-                         "текстовые файлы читаются как текст. Возвращает файл, номер строки и строку; номер строки "
-                         "тот же, что покажет read. path сужает до папки, include — до имён (\"*.pdf\", \"*.{doc,docx}\"). "
-                         "Использовать ПЕРВЫМ делом, когда вопрос касается регламентов, договоров, планов, цифр — "
-                         f"того, что записано в файлах. {_where()}",
-             read_only=True,
+@plugin.tool(read_only=True, fill={"area": _area},
              schema={"type": "object", "properties": {
-                 "pattern": {"type": "string", "description": "Регулярное выражение (Python), регистр не важен"},
-                 "path": {"type": "string", "description": "Папка или файл; пусто — вся область"},
-                 "include": {"type": "string", "description": "Шаблон имён файлов, например *.docx или *.{xls,xlsx}"}},
+                 "pattern": {"type": "string"},
+                 "path": {"type": "string"},
+                 "include": {"type": "string"}},
                  "required": ["pattern"]})
 def grep(pattern: str = "", path: str = "", include: str = ""):
     if not str(pattern or ""):
-        raise ValueError("нужно регулярное выражение для поиска")
+        raise ValueError(say("нужно регулярное выражение для поиска", "a regular expression to search for is needed"))
     try:
         rx = re.compile(str(pattern), re.IGNORECASE)
     except re.error as exc:
-        raise ValueError(f"регулярное выражение не разбирается: {exc}") from exc
+        raise ValueError(say(f"регулярное выражение не разбирается: {exc}", f"the regular expression does not parse: {exc}")) from exc
     names = _include_patterns(include)
     rows: list[tuple[str, int, str]] = []
     for start in _starts(path):
@@ -147,14 +154,14 @@ def grep(pattern: str = "", path: str = "", include: str = ""):
                 if rx.search(line):
                     rows.append((str(loc), n, line))
     if not rows:
-        return "Ничего не найдено"
-    out = [f"Найдено {_count(len(rows))}"]
+        return say("Ничего не найдено", "No matches found")
+    out = [say(f"Найдено {_count(len(rows))}", f"Found {_count(len(rows))}")]
     current = None
     for path_, n, line in rows:
         if path_ != current:
             out += ["", f"{path_}:"]
             current = path_
-        out.append(f"  Строка {n}: {line}")
+        out.append(say(f"  Строка {n}: {line}", f"  Line {n}: {line}"))
     return "\n".join(out)
 
 
@@ -169,6 +176,8 @@ def _include_patterns(include: str) -> list[str]:
 
 
 def _count(n: int) -> str:
+    if english():
+        return f"{n} {plural_en(n, 'match', 'matches')}"
     if n % 10 == 1 and n % 100 != 11:
         return f"{n} совпадение"
     if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
@@ -176,21 +185,14 @@ def _count(n: int) -> str:
     return f"{n} совпадений"
 
 
-@plugin.tool(description="Прочитать файл или папку по абсолютному пути (локальному /srv/… или сетевому "
-                         "\\\\сервер\\папка\\…, smb://сервер/папка/…). Документ Word приходит как markdown, таблица — "
-                         "листами-таблицами, презентация — слайдами с заметками, PDF — постранично, текстовый файл — "
-                         "как есть; строки пронумерованы «N: текст». Папка — списком записей, папки со слэшем на конце. "
-                         "По умолчанию файл читается ЦЕЛИКОМ; offset (с какой строки, от 1) и limit (сколько строк) — "
-                         "если нужна часть. Использовать, когда путь известен или найден через glob/grep. "
-                         f"{_where()}",
-             read_only=True,
+@plugin.tool(read_only=True, fill={"area": _area},
              schema={"type": "object", "properties": {
-                 "filePath": {"type": "string", "description": "Абсолютный путь к файлу или папке"},
-                 "offset": {"type": "integer", "description": "Первая строка (от 1); пусто — с начала"},
-                 "limit": {"type": "integer", "description": "Сколько строк; пусто — до конца"}},
+                 "filePath": {"type": "string"},
+                 "offset": {"type": "integer"},
+                 "limit": {"type": "integer"}},
                  "required": ["filePath"]})
 def read(filePath: str = "", offset: int = 0, limit: int = 0):
-    loc = resolve(filePath, "файл")
+    loc = resolve(filePath, FILE)
     s = store_for(loc)
     try:
         entry = s.stat(loc)
@@ -201,15 +203,18 @@ def read(filePath: str = "", offset: int = 0, limit: int = 0):
     try:
         text = extract.text_of(entry.name, s.read(loc))
     except extract.Unreadable as exc:
-        return f"<path>{loc}</path>\n<type>binary</type>\n<kind>{extract.kind_of(entry.name)}</kind>\n({exc} — прочитать как текст нельзя)"
+        why = say(f"({exc} — прочитать как текст нельзя)", f"({exc} — it cannot be read as text)")
+        return f"<path>{loc}</path>\n<type>binary</type>\n<kind>{extract.kind_of(entry.name)}</kind>\n{why}"
     lines = text.splitlines()
     start = int(offset or 1)
     if start < 1 or (start > len(lines) and not (len(lines) == 0 and start == 1)):
-        raise ValueError(f"offset {start} вне файла: в нём {len(lines)} строк")
+        raise ValueError(say(f"offset {start} вне файла: в нём {len(lines)} строк",
+                             f"offset {start} is outside the file: it has {len(lines)} lines"))
     end = min(len(lines), start - 1 + int(limit)) if limit else len(lines)
     body = "\n".join(f"{n}: {line}" for n, line in zip(range(start, end + 1), lines[start - 1:end]))
-    tail = (f"(Показаны строки {start}–{end} из {len(lines)}. Продолжить с offset={end + 1})" if end < len(lines)
-            else f"(Конец файла — всего {len(lines)} строк)")
+    tail = (say(f"(Показаны строки {start}–{end} из {len(lines)}. Продолжить с offset={end + 1})",
+                f"(Lines {start}–{end} of {len(lines)} shown. Continue with offset={end + 1})") if end < len(lines)
+            else say(f"(Конец файла — всего {len(lines)} строк)", f"(End of file — {len(lines)} lines in all)"))
     return f"<path>{loc}</path>\n<type>file</type>\n<kind>{extract.kind_of(entry.name)}</kind>\n<content>\n{body}\n\n{tail}\n</content>"
 
 
@@ -220,6 +225,8 @@ def _read_dir(loc: area.Location, s) -> str:
 
 
 def _entries(n: int) -> str:
+    if english():
+        return f"{n} {plural_en(n, 'entry', 'entries')}"
     if n % 10 == 1 and n % 100 != 11:
         return f"{n} запись"
     if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
@@ -237,31 +244,34 @@ def _missing(loc: area.Location, s) -> str:
                 if stem in e.name.lower() or e.name.lower().rsplit(".", 1)[0] in base]
     except (store.Missing, OSError):
         near = []
-    msg = f"Файл не найден: {loc}"
+    msg = say(f"Файл не найден: {loc}", f"File not found: {loc}")
     if near:
-        msg += "\n\nВозможно, вы имели в виду:\n" + "\n".join(near)
+        msg += say("\n\nВозможно, вы имели в виду:\n", "\n\nPerhaps you meant:\n") + "\n".join(near)
     return msg
 
 
 @plugin.check
 def check():
     if not AREA.roots:
-        return {"ok": True, "detail": "Папки не заданы — бот читает весь диск машины, на которой стоит коннектор."}
+        return {"ok": True, "detail": say("Папки не заданы — бот читает весь диск машины, на которой стоит коннектор.",
+                                          "No folders are set — the bot reads the whole disk of the connector's machine.")}
     seen, notes = 0, []
     for root in AREA.roots:
         try:
             store_for(root).stat(root)
             seen += 1
         except store.Missing:
-            notes.append(f"{root}: нет такого пути")
+            notes.append(say(f"{root}: нет такого пути", f"{root}: no such path"))
         except Exception as exc:  # a share that will not answer names itself
             notes.append(f"{root}: {exc}")
     servers = sorted({r.server for r in AREA.roots if r.kind == "smb"})
     if servers:
-        account = plugin.credential("share").get("username") or "(без учётной записи)"
-        notes.append(f"сетевые папки {', '.join(servers)} — учётная запись {account}")
+        account = plugin.credential("share").get("username") or say("(без учётной записи)", "(no account)")
+        notes.append(say(f"сетевые папки {', '.join(servers)} — учётная запись {account}",
+                         f"network folders {', '.join(servers)} — account {account}"))
     detail = visible(seen, len(AREA.roots), one="указанную папку", many="указанные папки",
-                     many_of="указанных папок", fix="Проверьте путь и права на чтение.")
+                     many_of="указанных папок", fix="Проверьте путь и права на чтение.",
+                     en=dict(one="the listed folder", many="listed folders", fix="Check the path and the read permissions."))
     if notes:
         detail += " " + "; ".join(notes) + "."
     return {"ok": seen == len(AREA.roots), "detail": detail}

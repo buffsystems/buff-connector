@@ -19,6 +19,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // A service account and an OAuth account hold no bearer at rest: the host mints
@@ -155,7 +157,7 @@ func TestOAuth2NotSignedInSaysSoUntilTheFileGainsARefreshToken(t *testing.T) {
 	up, gate, seen := upstreamAndGate(t, Credential{Kind: KindOAuth2, File: file, OAuth: spec})
 
 	_, err := gate.Do(context.Background(), HTTPRequest{Credential: "api", URL: up.URL + "/"})
-	if err == nil || !strings.Contains(err.Error(), "not signed in") {
+	if err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), "not signed in") {
 		t.Fatalf("err = %v, want a clear 'not signed in'", err)
 	}
 	_ = SaveOAuthSecret(file, OAuthSecret{ClientID: "cid", ClientSecret: "csec", RefreshToken: "R"})
@@ -229,7 +231,7 @@ func TestAServiceAccountFileThatIsNotOneIsNamedAsSuch(t *testing.T) {
 	spec := &OAuthSpec{TokenURI: "http://127.0.0.1:1/token", Scopes: []string{"s"}}
 	up, gate, _ := upstreamAndGate(t, Credential{Kind: KindServiceAccount, File: file, OAuth: spec})
 	_, err := gate.Do(context.Background(), HTTPRequest{Credential: "api", URL: up.URL + "/"})
-	if err == nil || !strings.Contains(err.Error(), "service account JSON key") {
+	if err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), "service account JSON key") {
 		t.Fatalf("err = %v", err)
 	}
 }

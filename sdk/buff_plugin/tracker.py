@@ -18,6 +18,8 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
+from .words import say
+
 # The work a request can ask for. `ask` is the default because a person who
 # writes to the bot without naming a mode wants an answer, not a ceremony.
 ACTIONS = ("ask", "research", "task")
@@ -187,7 +189,8 @@ class Scope:
 
     def require(self, value) -> None:
         if not self.allows(value):
-            raise RuntimeError(f"{value} вне области, разрешённой этому подключению")
+            raise RuntimeError(say(f"{value} вне области, разрешённой этому подключению",
+                                   f"{value} is outside the area this connection is allowed"))
 
 
 def moment(value: str | None) -> datetime | None:

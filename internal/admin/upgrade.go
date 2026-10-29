@@ -38,7 +38,7 @@ func (s *Server) instanceUpgrade(w http.ResponseWriter, r *http.Request) {
 		Fingerprint string `json:"fingerprint"`
 	}
 	if err := readJSON(r, &req); err != nil || s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	cfg, err := config.LoadLenient(s.cfgPath)

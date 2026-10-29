@@ -30,10 +30,10 @@ import (
 // a bundle we should be running at all.
 
 // ErrUntrusted means the bundle is not signed by a key this build trusts.
-var ErrUntrusted = errors.New("bundle is not signed by a trusted key")
+var ErrUntrusted = errors.New("пакет подписан не доверенным ключом")
 
 // ErrRevoked means the bundle is signed, but we have withdrawn it.
-var ErrRevoked = errors.New("bundle version has been withdrawn")
+var ErrRevoked = errors.New("эта версия пакета отозвана")
 
 // TrustedKeys are the publisher keys this build accepts. It is a SET, not one
 // key: instances stay pinned to old versions for a long time, so a new key has
@@ -79,7 +79,7 @@ type Revocation struct {
 // Verify checks the detached signature against every trusted key.
 func Verify(bundle, sig []byte, keys []string) error {
 	if len(keys) == 0 {
-		return fmt.Errorf("%w: this build trusts no publisher keys", ErrUntrusted)
+		return fmt.Errorf("%w — эта сборка не доверяет ни одному ключу издателя", ErrUntrusted)
 	}
 	for _, k := range keys {
 		raw, err := base64.StdEncoding.DecodeString(k)
@@ -104,11 +104,11 @@ func Digest(bundle []byte) string {
 // outside it.
 func unpack(archive []byte, dir string) error {
 	if len(archive) > MaxBundleSize {
-		return fmt.Errorf("bundle is larger than the %d byte limit", MaxBundleSize)
+		return fmt.Errorf("пакет больше предела в %d байт", MaxBundleSize)
 	}
 	gz, err := gzip.NewReader(strings.NewReader(string(archive)))
 	if err != nil {
-		return fmt.Errorf("bundle is not a gzip archive: %w", err)
+		return fmt.Errorf("пакет — не gzip-архив: %w", err)
 	}
 	defer gz.Close()
 
@@ -120,7 +120,7 @@ func unpack(archive []byte, dir string) error {
 			return nil
 		}
 		if err != nil {
-			return fmt.Errorf("reading bundle: %w", err)
+			return fmt.Errorf("чтение пакета: %w", err)
 		}
 		target, err := safeJoin(dir, h.Name)
 		if err != nil {
@@ -137,7 +137,7 @@ func unpack(archive []byte, dir string) error {
 			}
 			written += h.Size
 			if written > MaxBundleSize {
-				return fmt.Errorf("bundle expands past the %d byte limit", MaxBundleSize)
+				return fmt.Errorf("пакет распаковывается больше предела в %d байт", MaxBundleSize)
 			}
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 			if err != nil {
@@ -151,15 +151,15 @@ func unpack(archive []byte, dir string) error {
 				return err
 			}
 			if n != h.Size {
-				return fmt.Errorf("bundle entry %s does not match its declared size", h.Name)
+				return fmt.Errorf("в пакете %s не совпадает с объявленным размером", h.Name)
 			}
 		case tar.TypeSymlink, tar.TypeLink:
 			// A link is how an archive reaches a file it does not contain — the
 			// identity seed, /etc/shadow, another instance's state. There is no
 			// legitimate use for one inside a plugin bundle.
-			return fmt.Errorf("bundle entry %s is a link, which is not allowed", h.Name)
+			return fmt.Errorf("в пакете %s — ссылка, а они запрещены", h.Name)
 		default:
-			return fmt.Errorf("bundle entry %s has an unsupported type", h.Name)
+			return fmt.Errorf("в пакете у %s неподдерживаемый тип", h.Name)
 		}
 	}
 }
@@ -168,15 +168,15 @@ func unpack(archive []byte, dir string) error {
 // out — the classic zip-slip.
 func safeJoin(dir, name string) (string, error) {
 	if filepath.IsAbs(name) || strings.HasPrefix(name, "/") {
-		return "", fmt.Errorf("bundle entry %s is an absolute path", name)
+		return "", fmt.Errorf("в пакете %s — абсолютный путь", name)
 	}
 	clean := filepath.Clean(name)
 	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("bundle entry %s climbs out of the bundle", name)
+		return "", fmt.Errorf("в пакете %s выходит за пределы пакета", name)
 	}
 	target := filepath.Join(dir, clean)
 	if !strings.HasPrefix(target, filepath.Clean(dir)+string(filepath.Separator)) {
-		return "", fmt.Errorf("bundle entry %s resolves outside the bundle", name)
+		return "", fmt.Errorf("в пакете %s ведёт за пределы пакета", name)
 	}
 	return target, nil
 }

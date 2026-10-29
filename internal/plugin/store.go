@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // The store holds installed plugin code, addressed by the digest of the signed
@@ -36,6 +38,8 @@ type Installed struct {
 	Digest   string
 	Dir      string
 	Manifest *Manifest
+	// English is the bundle's EnglishFile, nil when it carries none.
+	English *English
 }
 
 func NewStore(stateDir string, keys []string, rev *Revocation) *Store {
@@ -89,7 +93,7 @@ func (s *Store) Install(bundle, sig []byte) (*Installed, error) {
 	if err := os.Chmod(dir, 0o755); err != nil {
 		return nil, err
 	}
-	return &Installed{Digest: digest, Dir: dir, Manifest: man}, nil
+	return &Installed{Digest: digest, Dir: dir, Manifest: man, English: readEnglish(dir)}, nil
 }
 
 // Resolve finds an installed plugin by name and version.
@@ -103,7 +107,7 @@ func (s *Store) Resolve(name, version string) (*Installed, error) {
 			return in, nil
 		}
 	}
-	return nil, fmt.Errorf("plugin %s %s is not installed", name, version)
+	return nil, problem.New("plugin_not_installed", name, version)
 }
 
 // List reads what is on disk. Directories that do not parse are skipped rather
@@ -142,7 +146,7 @@ func (s *Store) open(digest string) (*Installed, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Installed{Digest: digest, Dir: dir, Manifest: man}, nil
+	return &Installed{Digest: digest, Dir: dir, Manifest: man, English: readEnglish(dir)}, nil
 }
 
 // CheckIntegrity re-hashes the unpacked tree and compares it with what was
@@ -155,15 +159,14 @@ func (s *Store) open(digest string) (*Installed, error) {
 func (s *Store) CheckIntegrity(in *Installed) error {
 	recorded, err := os.ReadFile(filepath.Join(in.Dir, treeSumFile))
 	if err != nil {
-		return fmt.Errorf("plugin %s has no integrity record: %w", in.Manifest.Name, err)
+		return problem.Wrap("plugin_integrity_missing", err, in.Manifest.Name)
 	}
 	actual, err := treeSum(in.Dir)
 	if err != nil {
 		return err
 	}
 	if strings.TrimSpace(string(recorded)) != actual {
-		return fmt.Errorf("plugin %s %s has been modified since it was installed",
-			in.Manifest.Name, in.Manifest.Version)
+		return problem.New("plugin_modified", in.Manifest.Name, in.Manifest.Version)
 	}
 	return nil
 }
@@ -213,7 +216,7 @@ const treeSumFile = ".buff-tree-sha256"
 func readManifest(dir string) (*Manifest, error) {
 	b, err := os.ReadFile(filepath.Join(dir, "manifest.yaml"))
 	if err != nil {
-		return nil, fmt.Errorf("bundle has no manifest.yaml: %w", err)
+		return nil, fmt.Errorf("в пакете нет manifest.yaml: %w", err)
 	}
 	return ParseManifest(b)
 }

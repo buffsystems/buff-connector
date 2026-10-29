@@ -17,7 +17,7 @@ type bitbucketServer struct {
 
 func newBitbucketServer(base, project, slug string, client *http.Client) (Provider, error) {
 	if base == "" {
-		return nil, fmt.Errorf("provider: bitbucket-server requires a base URL")
+		return nil, fmt.Errorf("провайдер — bitbucket-server нужен base URL")
 	}
 	return &bitbucketServer{client: client, base: base, project: project, slug: slug}, nil
 }
@@ -82,7 +82,7 @@ func (b *bitbucketServer) CreatePR(ctx context.Context, token string, spec PRSpe
 	if isAlreadyExists(resp) {
 		return PRResult{AlreadyExists: true}, nil
 	}
-	return PRResult{}, fmt.Errorf("provider: create PR failed (%d): %s", resp.status, providerMessage(resp.body))
+	return PRResult{}, fmt.Errorf("провайдер — PR не создан (%d): %s", resp.status, providerMessage(resp.body))
 }
 
 func (b *bitbucketServer) ListRepos(ctx context.Context, token string) ([]RepoRef, error) {

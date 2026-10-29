@@ -1,9 +1,8 @@
 package agent
 
 import (
-	"fmt"
-
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // ignoredSectionNotices explains, one line per section, why a part of the
@@ -14,11 +13,11 @@ func ignoredSectionNotices(skipped []string) []string {
 	var out []string
 	for _, name := range skipped {
 		if note, ok := config.RetiredSection(name); ok {
-			out = append(out, fmt.Sprintf("config: section %q is no longer used — %s", name, note))
+			out = append(out, i18n.Sprintf("конфиг — раздел %q больше не используется. %s", name, i18n.T(note)))
 			continue
 		}
-		out = append(out, fmt.Sprintf(
-			"config: ignoring section %q — this agent version does not support it; upgrade it", name))
+		out = append(out, i18n.Sprintf(
+			"конфиг — раздел %q пропущен: эта версия коннектора его не знает, обновите её", name))
 	}
 	return out
 }

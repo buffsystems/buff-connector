@@ -1,0 +1,33 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Gitea and Forgejo — questions and answers right in issues and pull requests
+tools:
+  search_issues: >-
+    Find issues and pull requests by text — when a number is mentioned or context from
+    the tracker is needed
+  get_issue: >-
+    Read an issue or pull request with its discussion — when requirements or the course
+    of a discussion are needed
+  get_pull_diff: Read a pull request’s changes as a single diff
+  add_comment: Write a comment in an issue or pull request
+config_schema:
+  base_url:
+    title: Gitea address
+    description: The server's root, for example https://git.corp.local
+  repos:
+    title: Repositories
+    description: >-
+      In these repositories the bot answers requests — and only in them does it write.
+      The format is owner/repository, for example acme/api.
+  mention_alias:
+    title: Other name the bot answers to
+    description: An extra name besides the account, for example buff
+  accept_assignment:
+    title: Take on issues assigned to the bot
+    description: >-
+      By default the bot takes on work only when addressed directly — a mention or a
+      command in a comment. Assigning an issue to its account is addressed to it too,
+      but also happens through routing rules when nobody meant to order any work. Turn
+      it on if assignment is a deliberate act by a person in your team.

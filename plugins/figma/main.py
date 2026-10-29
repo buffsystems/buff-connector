@@ -45,6 +45,7 @@ from buff_plugin import (
     Identity,
     Plugin,
     Scope,
+    say,
     visible,
     after,
     event_id,
@@ -90,7 +91,8 @@ _mentioned: set = set()
 
 class FigmaError(RuntimeError):
     def __init__(self, status: int, path: str, body: str):
-        super().__init__(f"Figma ответила {status} на {path}: {body[:300]}")
+        super().__init__(say(f"Figma ответила {status} на {path}: {body[:300]}",
+                             f"Figma answered {status} to {path}: {body[:300]}"))
         self.status = status
 
 
@@ -194,7 +196,8 @@ def thread_key(file_key: str, root_id) -> str:
 def split_key(key: str) -> tuple[str, str]:
     file_key, sep, root = str(key).rpartition("#")
     if not sep or not file_key or not root:
-        raise RuntimeError(f"{key} — не адрес обсуждения Figma (нужно КЛЮЧ_ФАЙЛА#номер комментария)")
+        raise RuntimeError(say(f"{key} — не адрес обсуждения Figma (нужно КЛЮЧ_ФАЙЛА#номер комментария)",
+                               f"{key} is not a Figma discussion address (FILE_KEY#comment number is needed)"))
     return file_key, root
 
 
@@ -237,7 +240,7 @@ def comment_event(file_key: str, c: dict, since: str | None, roots: dict | None 
     name = file_name(file_key)
     return Event(
         id=event_id("comment", c.get("id"), at), at=at, kind="comment",
-        title=f"{name}: {'узел ' + str(node) if node else 'обсуждение #' + str(c.get('order_id') or root)}",
+        title=f"{name}: {say('узел ', 'node ') + str(node) if node else say('обсуждение #', 'discussion #') + str(c.get('order_id') or root)}",
         body=cmd.instruction,
         author=str(user.get("handle", "")),
         # Who asked, for the connection's «who may ask» rules (#476). A handle is
@@ -265,20 +268,23 @@ def variables_available(file_key: str) -> tuple[bool, str]:
     operator's terms: Enterprise-only is a fact about the plan, not a fault."""
     try:
         api("GET", f"/v1/files/{quote(file_key)}/variables/local")
-        return True, "Переменные доступны."
+        return True, say("Переменные доступны.", "Variables are available.")
     except FigmaError as e:
         if e.status in (401, 403):
-            return False, "На этом тарифе Figma переменные недоступны — цвета и размеры бот берёт из стилей."
-        return False, f"Переменные не прочитались: {e}"
+            return False, say("На этом тарифе Figma переменные недоступны — цвета и размеры бот берёт из стилей.",
+                              "Variables are not available on this Figma plan — the bot takes colours and sizes from the styles.")
+        return False, say(f"Переменные не прочитались: {e}", f"The variables could not be read: {e}")
 
 
 @plugin.check
 def check():
     whoami()
     if unlisted():
-        return {"ok": True,
-                "detail": f"Figma, вошли как {signed_in()}. Бот видит все файлы, открытые учётной записи; "
-                          "вопросы из комментариев приходят через вебхук."}
+        return {"ok": True, "detail": say(
+            f"Figma, вошли как {signed_in()}. Бот видит все файлы, открытые учётной записи; "
+            "вопросы из комментариев приходят через вебхук.",
+            f"Figma, signed in as {signed_in()}. The bot sees every file open to the account; "
+            "questions from comments arrive through the webhook.")}
     files = scope_files()
     seen = 0
     for key in files:
@@ -287,13 +293,14 @@ def check():
             seen += 1
         except FigmaError:
             pass
-    variables = "Переменные не проверялись: файлов пока нет."
+    variables = say("Переменные не проверялись: файлов пока нет.", "Variables were not checked: there are no files yet.")
     if files:
         variables = variables_available(next(iter(files)))[1]
-    return {"ok": True,
-            "detail": f"Figma, вошли как {signed_in()}. "
-                      f"{visible(seen, len(files), one='указанный файл', many='указанные файлы', many_of='указанных файлов', fix='Откройте их учётной записи бота в самой Figma.')} "
-                      f"{variables}"}
+    sees = visible(seen, len(files), one="указанный файл", many="указанные файлы", many_of="указанных файлов",
+                   fix="Откройте их учётной записи бота в самой Figma.",
+                   en=dict(one="the listed file", many="listed files", fix="Share them with the bot's account in Figma itself."))
+    return {"ok": True, "detail": say(f"Figma, вошли как {signed_in()}. {sees} {variables}",
+                                      f"Figma, signed in as {signed_in()}. {sees} {variables}")}
 
 
 @plugin.poll
@@ -307,7 +314,8 @@ def poll(since):
         except FigmaError as e:
             # One file the token cannot read (moved, access revoked, deleted)
             # must not silence every other file in the scope.
-            plugin.log(f"файл {key} не прочитался, пропущен в этом проходе: {e}")
+            plugin.log(say(f"файл {key} не прочитался, пропущен в этом проходе: {e}",
+                           f"file {key} could not be read, skipped in this pass: {e}"))
             continue
         roots = {str(c.get("id")): c for c in comments if not c.get("parent_id")}
         for c in comments:
@@ -345,12 +353,14 @@ def webhook(headers: dict, body: str):
 def comment_body(text: str, link: dict | None, attachment: dict | None) -> str:
     parts = [text.strip()] if text and text.strip() else []
     if link and link.get("url"):
-        parts.append(f"{link.get('title') or 'Открыть в Buff'}: {link['url']}")
+        parts.append(f"{link.get('title') or say('Открыть в Buff', 'Open in Buff')}: {link['url']}")
     if attachment:
         # A Figma comment takes no files. The document is not lost — it is behind
         # the link above — and saying so beats a silently missing attachment.
-        parts.append(f"Документ «{attachment.get('filename', 'report.pdf')}» к комментарию Figma "
-                     "приложить нельзя — он доступен по ссылке выше.")
+        name = attachment.get('filename', 'report.pdf')
+        parts.append(say(f"Документ «{name}» к комментарию Figma приложить нельзя — он доступен по ссылке выше.",
+                         f"The document “{name}” cannot be attached to a Figma comment — it is available by the "
+                         "link above."))
     return "\n\n".join(parts)
 
 
@@ -393,29 +403,23 @@ def _require(file_key: str) -> None:
     require_area(file_key)
 
 
-@plugin.tool(description="Перечислить макеты (файлы Figma), к которым подключён бот: ключ, название, проект. "
-                         "Использовать ПЕРВЫМ делом, когда вопрос про дизайн, экран, макет или токены, "
-                         "а ключ файла в вопросе не назван. Поле area говорит, какова область: если это "
-                         "все файлы учётной записи, в списке только те, где бота упоминали, а любой другой "
-                         "файл открывается по ключу из ссылки figma.com/design/КЛЮЧ/….",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {}, "additionalProperties": False})
 def list_files():
     out = []
     for key, meta in watched_files().items():
         out.append({"key": key, "name": meta.get("name") or file_name(key), "project": meta.get("project", ""),
                     "updated": meta.get("updated"), "url": f"{WEB}/design/{key}"})
-    area = ("все файлы, открытые учётной записи бота; в списке — те, где бота уже упоминали, "
-            "любой другой открывается по ключу из ссылки figma.com/design/КЛЮЧ/…" if unlisted()
-            else "перечисленные файлы и файлы перечисленных проектов")
+    area = (say("все файлы, открытые учётной записи бота; в списке — те, где бота уже упоминали, "
+                "любой другой открывается по ключу из ссылки figma.com/design/КЛЮЧ/…",
+                "all the files open to the bot's account; the list holds those where the bot was already "
+                "mentioned, any other opens by the key from a figma.com/design/KEY/… link") if unlisted()
+            else say("перечисленные файлы и файлы перечисленных проектов",
+                     "the listed files and the files of the listed projects"))
     return {"area": area, "total": len(out), "files": out}
 
 
-@plugin.tool(description="Структура макета: страницы, фреймы и их размеры, вложенность до заданной глубины, "
-                         "список стилей и компонентов файла. Использовать, чтобы понять, из чего состоит файл, "
-                         "и выбрать узел (id вида 1:23) для get_node. depth=1 — только страницы, 2 — страницы и "
-                         "фреймы верхнего уровня (по умолчанию), больше — глубже.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "depth": {"type": "integer"}},
                      "required": ["key"], "additionalProperties": False})
@@ -437,12 +441,7 @@ def get_file(key: str = "", depth: int = 2):
     }
 
 
-@plugin.tool(description="Узел макета с поддеревом и всеми параметрами: положение и размер, автолейаут "
-                         "(направление, отступы, интервалы, выравнивание), заливки и обводки в hex, "
-                         "скругления, эффекты, типографика и тексты, привязанные стили и переменные по именам, "
-                         "компонент экземпляра и его свойства. Использовать, когда нужны точные значения "
-                         "экрана, блока или элемента (id вида 1:23 — из get_file или search_nodes).",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "node_id": {"type": "string"},
                                     "depth": {"type": "integer"}},
@@ -455,16 +454,12 @@ def get_node(key: str = "", node_id: str = "", depth: int | None = None):
     payload = api("GET", path)
     entry = (payload.get("nodes") or {}).get(str(node_id))
     if not entry:
-        raise RuntimeError(f"узла {node_id} в файле {key} нет")
+        raise RuntimeError(say(f"узла {node_id} в файле {key} нет", f"there is no node {node_id} in file {key}"))
     return {"key": key, "file": payload.get("name"), "url": f"{WEB}/design/{key}?node-id={str(node_id).replace(':', '-')}",
             "node": compress(entry.get("document") or {}, context_of(entry, key))}
 
 
-@plugin.tool(description="Дизайн-токены файла: опубликованные стили со значениями (цвета в hex, типографика, "
-                         "эффекты, сетки), стили, использованные в файле, и переменные с значениями по режимам "
-                         "(тема, размер) — там, где план Figma даёт их читать. Использовать, когда вопрос про "
-                         "палитру, шрифты, токены или дизайн-систему.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_styles(key: str = ""):
@@ -498,11 +493,7 @@ def get_styles(key: str = ""):
             "variables": variables}
 
 
-@plugin.tool(description="Найти узлы макета по словам в имени слоя или в тексте: возвращает id, тип, страницу "
-                         "и путь. Использовать, когда в вопросе назван экран, кнопка, поле или текст, а его "
-                         "id неизвестен; дальше — get_node. types — необязательный список типов "
-                         "(frame, text, instance, component).",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "query": {"type": "string"},
                                     "types": {"type": "array", "items": {"type": "string"}}},
@@ -526,10 +517,7 @@ def search_nodes(key: str = "", query: str = "", types: list | None = None):
     return {"total": len(found), "nodes": found}
 
 
-@plugin.tool(description="Обсуждения макета: ветки комментариев с ответами, к какому узлу приколоты, "
-                         "кто и когда писал, решено ли. Использовать, когда вопрос про замечания, "
-                         "договорённости или историю обсуждения экрана.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_comments(key: str = ""):
@@ -551,11 +539,7 @@ def get_comments(key: str = ""):
     return {"key": key, "total": len(threads), "threads": list(threads.values())}
 
 
-@plugin.tool(description="Отрисовать узел макета в PNG и показать картинку. ТОЛЬКО для модели, которая "
-                         "читает изображения; параметры узла всегда доступны через get_node без картинки. "
-                         "Использовать, когда важно увидеть композицию целиком, а не значения. "
-                         "scale — масштаб 0.5–4.",
-             read_only=True, vision=True,
+@plugin.tool(read_only=True, vision=True,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "node_id": {"type": "string"},
                                     "scale": {"type": "number"}},
@@ -566,18 +550,20 @@ def render_node(key: str = "", node_id: str = "", scale: float = 1):
     rendered = api("GET", f"/v1/images/{quote(key)}?ids={quote(str(node_id))}&format=png&scale={factor:g}")
     url = (rendered.get("images") or {}).get(str(node_id))
     if not url:
-        raise RuntimeError(f"Figma не отрисовала узел {node_id}: {rendered.get('err') or 'узла нет или он пустой'}")
+        why = rendered.get('err') or say('узла нет или он пустой', 'there is no such node, or it is empty')
+        raise RuntimeError(say(f"Figma не отрисовала узел {node_id}: {why}", f"Figma did not render node {node_id}: {why}"))
     res = plugin.http("GET", url, credential="", headers={}, body="", binary=True)
     if res["status"] >= 400 or not res.get("body_base64"):
-        raise RuntimeError(f"картинка не скачалась: {res['status']}")
+        raise RuntimeError(say(f"картинка не скачалась: {res['status']}", f"the picture did not download: {res['status']}"))
     return {"content": [
         {"type": "image", "data": res["body_base64"], "mimeType": "image/png"},
-        {"type": "text", "text": f"Узел {node_id} файла {key}, масштаб {factor:g}: {WEB}/design/{key}?node-id={str(node_id).replace(':', '-')}"},
+        {"type": "text", "text": say(f"Узел {node_id} файла {key}, масштаб {factor:g}: ",
+                                     f"Node {node_id} of file {key}, scale {factor:g}: ")
+         + f"{WEB}/design/{key}?node-id={str(node_id).replace(':', '-')}"},
     ]}
 
 
-@plugin.tool(description="Написать комментарий в обсуждение макета.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

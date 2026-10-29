@@ -131,11 +131,11 @@ func (m *tokenMinter) bearer(ctx context.Context, name string, c Credential) (st
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if c.OAuth == nil || c.OAuth.TokenURI == "" {
-		return "", fmt.Errorf("credential %q: the manifest names no token endpoint for kind %s", name, c.Kind)
+		return "", fmt.Errorf("учётные данные %q — в манифесте нет адреса выдачи токена для вида %s", name, c.Kind)
 	}
 	secret, err := secretOf(c)
 	if err != nil {
-		return "", fmt.Errorf("credential %q: %w", name, err)
+		return "", fmt.Errorf("учётные данные %q: %w", name, err)
 	}
 	if t, ok := m.cache[name]; ok && t.from == string(secret) && m.now().Add(m.early).Before(t.expires) {
 		return t.token, nil
@@ -147,14 +147,14 @@ func (m *tokenMinter) bearer(ctx context.Context, name string, c Credential) (st
 	case KindOAuth2:
 		form, err = refreshGrant(secret)
 	default:
-		return "", fmt.Errorf("credential %q: kind %s is not minted", name, c.Kind)
+		return "", fmt.Errorf("учётные данные %q — вид %s не выпускается", name, c.Kind)
 	}
 	if err != nil {
-		return "", fmt.Errorf("credential %q: %w", name, err)
+		return "", fmt.Errorf("учётные данные %q: %w", name, err)
 	}
 	tok, ttl, err := postTokenForm(ctx, m.client, c.OAuth.TokenURI, form)
 	if err != nil {
-		return "", fmt.Errorf("credential %q: %w", name, err)
+		return "", fmt.Errorf("учётные данные %q: %w", name, err)
 	}
 	m.cache[name] = mintedToken{token: tok, expires: m.now().Add(ttl), from: string(secret)}
 	return tok, nil
@@ -172,7 +172,7 @@ func secretOf(c Credential) ([]byte, error) {
 		return b, nil
 	}
 	if c.Token == "" {
-		return nil, fmt.Errorf("no secret is configured")
+		return nil, fmt.Errorf("секрет не задан")
 	}
 	return []byte(c.Token), nil
 }
@@ -180,11 +180,11 @@ func secretOf(c Credential) ([]byte, error) {
 func serviceAccountGrant(secret []byte, spec *OAuthSpec, now time.Time) (url.Values, error) {
 	var key serviceAccountKey
 	if err := json.Unmarshal(secret, &key); err != nil || key.ClientEmail == "" || key.PrivateKey == "" {
-		return nil, fmt.Errorf("the secret is not a service account JSON key (client_email and private_key are needed)")
+		return nil, fmt.Errorf("секрет — не JSON-ключ сервисного аккаунта (нужны client_email и private_key)")
 	}
 	block, _ := pem.Decode([]byte(key.PrivateKey))
 	if block == nil {
-		return nil, fmt.Errorf("private_key is not PEM")
+		return nil, fmt.Errorf("private_key — не PEM")
 	}
 	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 	if err != nil {
@@ -192,7 +192,7 @@ func serviceAccountGrant(secret []byte, spec *OAuthSpec, now time.Time) (url.Val
 	}
 	rsaKey, ok := parsed.(*rsa.PrivateKey)
 	if !ok {
-		return nil, fmt.Errorf("private_key is not an RSA key")
+		return nil, fmt.Errorf("private_key — не ключ RSA")
 	}
 	claims := map[string]any{
 		"iss":   key.ClientEmail,
@@ -217,7 +217,7 @@ func refreshGrant(secret []byte) (url.Values, error) {
 		return nil, err
 	}
 	if s.RefreshToken == "" {
-		return nil, fmt.Errorf("not signed in yet — sign in on the connection page first")
+		return nil, fmt.Errorf("вход ещё не выполнен — сначала войдите на странице подключения")
 	}
 	return url.Values{
 		"grant_type":    {"refresh_token"},
@@ -256,22 +256,22 @@ func postTokenForm(ctx context.Context, client *http.Client, tokenURI string, fo
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", 0, fmt.Errorf("token endpoint: %w", err)
+		return "", 0, fmt.Errorf("адрес выдачи токена: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return "", 0, fmt.Errorf("token endpoint: %w", err)
+		return "", 0, fmt.Errorf("адрес выдачи токена: %w", err)
 	}
 	if resp.StatusCode/100 != 2 {
-		return "", 0, fmt.Errorf("token endpoint answered %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		return "", 0, fmt.Errorf("адрес выдачи токена ответил %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
 	var out struct {
 		AccessToken string `json:"access_token"`
 		ExpiresIn   int    `json:"expires_in"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil || out.AccessToken == "" {
-		return "", 0, fmt.Errorf("token endpoint answered without an access_token")
+		return "", 0, fmt.Errorf("адрес выдачи токена ответил без access_token")
 	}
 	ttl := time.Duration(out.ExpiresIn) * time.Second
 	if ttl <= 0 {

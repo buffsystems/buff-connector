@@ -25,6 +25,8 @@ from urllib.parse import quote
 
 from buff_plugin import (
     plural,
+    plural_en,
+    say,
     Event,
     Identity,
     Plugin,
@@ -65,7 +67,8 @@ def api(method: str, path: str, body: dict | None = None):
                       headers={"Content-Type": "application/json"} if body else {},
                       body=json.dumps(body) if body else "")
     if res["status"] >= 400:
-        raise RuntimeError(f"Redmine ответила {res['status']} на {path}: {res['body'][:300]}")
+        raise RuntimeError(say(f"Redmine ответила {res['status']} на {path}: {res['body'][:300]}",
+                               f"Redmine answered {res['status']} to {path}: {res['body'][:300]}"))
     return json.loads(res["body"]) if res["body"].strip() else {}
 
 
@@ -133,7 +136,8 @@ def issue_key(project: str, ident) -> str:
 def split_key(key: str) -> tuple[str, int]:
     project, _, ident = str(key).strip().rpartition("#")
     if not project or not ident.isdigit():
-        raise RuntimeError(f"{key} — не адрес задачи в Redmine (нужно проект#номер)")
+        raise RuntimeError(say(f"{key} — не адрес задачи в Redmine (нужно проект#номер)",
+                               f"{key} is not a Redmine issue address (project#number is needed)"))
     return project, int(ident)
 
 
@@ -214,7 +218,7 @@ def note_text(text: str, link: dict | None, attachment_note: str) -> str:
     body = (to_textile(text) if TEXTILE else text).strip() if text else ""
     parts = [body] if body else []
     if link and link.get("url"):
-        title = link.get("title") or "Открыть в Buff"
+        title = link.get("title") or say("Открыть в Buff", "Open in Buff")
         parts.append(f'"{title}":{link["url"]}' if TEXTILE else f"[{title}]({link['url']})")
     if attachment_note:
         parts.append(attachment_note)
@@ -233,7 +237,8 @@ def upload(attachment: dict) -> dict | None:
                       headers={"Content-Type": "application/octet-stream"},
                       body=content.decode("latin-1"))
     if res["status"] >= 400:
-        raise RuntimeError(f"вложение не принято: {res['status']} {res['body'][:200]}")
+        raise RuntimeError(say(f"вложение не принято: {res['status']} {res['body'][:200]}",
+                               f"the attachment was not accepted: {res['status']} {res['body'][:200]}"))
     token = (json.loads(res["body"]).get("upload") or {}).get("token", "")
     if not token:
         return None
@@ -247,9 +252,11 @@ def check():
     whoami()
     # Redmine publishes no version over its API, so the check says what it can
     # prove: which account it reached and how many projects it may act in.
-    return {"ok": True,
-            "detail": f"Redmine, вошли как {me['name'] or me['login']}. "
-                      f"Бот работает в {len(scope.allowed)} {plural(len(scope.allowed), 'проекте', 'проектах', 'проектах')}."}
+    n = len(scope.allowed)
+    who = me['name'] or me['login']
+    return {"ok": True, "detail": say(
+        f"Redmine, вошли как {who}. Бот работает в {n} {plural(n, 'проекте', 'проектах', 'проектах')}.",
+        f"Redmine, signed in as {who}. The bot works in {n} {plural_en(n, 'project', 'projects')}.")}
 
 
 @plugin.poll
@@ -286,10 +293,12 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     # question keeps its document in Buff, behind the link.
     upload_spec = upload(attachment) if attachment and not private else None
     if upload_spec:
-        doc = f"Документ приложен: {upload_spec['filename']}"
+        doc = say(f"Документ приложен: {upload_spec['filename']}", f"The document is attached: {upload_spec['filename']}")
     elif attachment:
-        doc = ("Документ — в Buff по ссылке: вопрос был закрытой заметкой, "
-               "а вложение к задаче увидели бы все.")
+        doc = say("Документ — в Buff по ссылке: вопрос был закрытой заметкой, "
+                  "а вложение к задаче увидели бы все.",
+                  "The document is in Buff, by the link: the question was a private note, "
+                  "and everyone would see an attachment to the issue.")
     else:
         doc = ""
     note = note_text(text, link, doc)
@@ -303,9 +312,7 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     return {"ok": True}
 
 
-@plugin.tool(description="Найти задачи в подключённых проектах по тексту. Использовать, когда "
-                         "упомянут номер задачи или нужен контекст из трекера клиента.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["query"], "additionalProperties": False})
@@ -320,9 +327,7 @@ def search_issues(query: str = "", limit: int = 20):
     return {"total": len(found), "issues": found}
 
 
-@plugin.tool(description="Прочитать задачу целиком, вместе с обсуждением. Использовать, когда нужен "
-                         "текст требований, критерии приёмки или ход обсуждения.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_issue(key: str = ""):
@@ -340,8 +345,7 @@ def get_issue(key: str = ""):
     }
 
 
-@plugin.tool(description="Написать комментарий в задачу.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

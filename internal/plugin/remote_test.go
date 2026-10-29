@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // A remote MCP server the way the published transport describes one: every
@@ -203,7 +206,7 @@ func TestRemoteServerAcceptingARequestWithoutAnAnswerIsAnError(t *testing.T) {
 	defer srv.Close()
 	in, ctx := remoteInstance(t, srv.URL+"/mcp")
 	err := in.Start(ctx)
-	if err == nil || !strings.Contains(err.Error(), "without answering") {
+	if err == nil || !errors.Is(err, problem.New("remote_no_answer")) {
 		t.Fatalf("err = %v, want the unanswered tools/list named", err)
 	}
 }

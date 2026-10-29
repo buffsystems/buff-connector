@@ -31,7 +31,7 @@ func ChunkFile(path string, size int, fn func(Chunk) error) error {
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("open blob: %w", err)
+		return fmt.Errorf("открытие файла: %w", err)
 	}
 	defer f.Close()
 
@@ -42,7 +42,7 @@ func ChunkFile(path string, size int, fn func(Chunk) error) error {
 	for {
 		n, rerr := io.ReadFull(r, buf)
 		if rerr != nil && rerr != io.EOF && rerr != io.ErrUnexpectedEOF {
-			return fmt.Errorf("read blob: %w", rerr)
+			return fmt.Errorf("чтение файла: %w", rerr)
 		}
 		if n > 0 {
 			// Peek one byte to learn whether anything follows this chunk.

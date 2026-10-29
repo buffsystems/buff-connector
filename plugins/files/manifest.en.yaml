@@ -1,0 +1,34 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Files on disk — local folders and SMB network folders — as context for answers: Word
+  documents, Excel spreadsheets, PowerPoint presentations (2007+ and 97–2003), PDF and
+  text files. The tools are the same glob, grep and read that AI coding agents have;
+  read only. Nothing is indexed: files are read at the moment of the question. The
+  integration runs as a separate system user — local files must be readable by that
+  user.
+tools:
+  glob: >-
+    Find files by name — a pattern such as *.docx or **/contract*, in all the listed
+    folders or in one; newest first
+  grep: >-
+    Find by content — a regular expression over the text of documents, spreadsheets,
+    presentations, PDF and text files; file, line number, line
+  read: >-
+    Read a file as text (a document as markdown, a spreadsheet by sheets, a presentation
+    by slides, a PDF by pages) or a folder as a list; whole, or in pages by offset/limit
+config_schema:
+  roots:
+    title: Folders
+    description: >-
+      Local paths (/srv/docs) and network folders (\\server\share\section or
+      smb://server/share/section); the bot works in them and in everything inside. Empty
+      — the whole disk of the connector's machine; a network folder is available only if
+      it is listed here, because it is reached with a password.
+  excludes:
+    title: Exclusions
+    description: >-
+      Patterns of names and paths the bot does not see: *.bak, ~$*, .git, archive/2019.
+      Matched against a file or folder name at any depth and against the path from the
+      listed folder.

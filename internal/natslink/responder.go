@@ -63,7 +63,7 @@ func Connect(url, cid string, token TokenFunc) (*Responder, error) {
 	}
 	nc, err := nats.Connect(dial, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("connect as connector: %w", err)
+		return nil, fmt.Errorf("подключение как коннектор: %w", err)
 	}
 	r.nc = nc
 	return r, nil
@@ -97,7 +97,7 @@ func (r *Responder) subscribe(ctx context.Context, h func(ctx context.Context, m
 		go r.answer(ctx, msg)
 	})
 	if err != nil {
-		return nil, fmt.Errorf("subscribe %s: %w", subject, err)
+		return nil, fmt.Errorf("подписка на %s: %w", subject, err)
 	}
 	return sub, nil
 }

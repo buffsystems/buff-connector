@@ -34,7 +34,7 @@ import random
 import time
 from urllib.parse import quote
 
-from buff_plugin import Event, Identity, Plugin, event_id, parse_command, source, visible
+from buff_plugin import Event, Identity, Plugin, event_id, parse_command, say, source, visible
 
 from content import (
     bare_id,
@@ -93,7 +93,8 @@ _users: dict[str, dict] = {}
 
 class NotionError(RuntimeError):
     def __init__(self, status: int, path: str, body: str):
-        super().__init__(f"Notion ответил {status} на {path}: {body[:300]}")
+        super().__init__(say(f"Notion ответил {status} на {path}: {body[:300]}",
+                             f"Notion answered {status} to {path}: {body[:300]}"))
         self.status = status
 
 
@@ -117,7 +118,7 @@ def api(method: str, path: str, body: dict | None = None, *, attempts: int = 6):
         if status >= 400:
             raise NotionError(status, path, res.get("body", ""))
         return json.loads(res["body"]) if res.get("body", "").strip() else {}
-    raise NotionError(429, path, "лимит запросов не отпустил")
+    raise NotionError(429, path, say("лимит запросов не отпустил", "the rate limit did not let go"))
 
 
 def paged(method: str, path: str, body: dict | None = None, *, key: str = "results") -> list:
@@ -191,9 +192,15 @@ def in_area(kind: str, id32: str) -> bool:
     return False
 
 
+def _kind(page: bool) -> str:
+    """What a search result or a child is, in the reader's words."""
+    return say("страница", "page") if page else say("база данных", "database")
+
+
 def require_area(kind: str, id32: str) -> None:
     if not in_area(kind, id32):
-        raise RuntimeError(f"{id32} вне области, разрешённой этому подключению")
+        raise RuntimeError(say(f"{id32} вне области, разрешённой этому подключению",
+                               f"{id32} is outside the area this connection is allowed"))
 
 
 def page_of_block(block_id: str) -> str:
@@ -259,7 +266,8 @@ def split_key(key: str) -> tuple[str, str]:
     try:
         return bare_id(page), (bare_id(discussion) if discussion else "")
     except ValueError as exc:
-        raise RuntimeError(f"{key} — не адрес страницы Notion (нужно СТРАНИЦА или СТРАНИЦА#обсуждение)") from exc
+        raise RuntimeError(say(f"{key} — не адрес страницы Notion (нужно СТРАНИЦА или СТРАНИЦА#обсуждение)",
+                               f"{key} is not a Notion page address (PAGE or PAGE#discussion is needed)")) from exc
 
 
 def page_of_comment(c: dict) -> str:
@@ -369,7 +377,7 @@ def comment_rich(text: str, link: dict | None, notes: list[str]) -> list[dict]:
         rich.extend(text_chunks(text.strip()))
     if link and link.get("url"):
         rich.extend(text_chunks("\n\n" if rich else ""))
-        rich.append(link_item(str(link.get("title") or "Открыть в Buff"), str(link["url"])))
+        rich.append(link_item(str(link.get("title") or say("Открыть в Buff", "Open in Buff")), str(link["url"])))
     for note in notes:
         rich.extend(text_chunks(("\n\n" if rich else "") + note))
     return rich
@@ -378,7 +386,7 @@ def comment_rich(text: str, link: dict | None, notes: list[str]) -> list[dict]:
 def create_child_page(parent: str, title: str, markdown: str) -> dict:
     return api("POST", "/v1/pages", {
         "parent": {"page_id": dashed(parent)},
-        "properties": {"title": {"title": text_chunks(title or "Без названия")}},
+        "properties": {"title": {"title": text_chunks(title or say("Без названия", "Untitled"))}},
         "markdown": markdown or "",
     })
 
@@ -413,10 +421,12 @@ def attach_pdf(page: str, attachment: dict) -> None:
 @plugin.check
 def check():
     whoami()
-    where = f"Notion, рабочее пространство «{me['workspace']}»" if me["workspace"] else "Notion"
+    where = (say(f"Notion, рабочее пространство «{me['workspace']}»", f"Notion, workspace “{me['workspace']}”")
+             if me["workspace"] else "Notion")
+    integration = say(f"интеграция «{me['name']}»", f"integration “{me['name']}”")
     if not ROOTS:
-        return {"ok": True,
-                "detail": f"{where}, интеграция «{me['name']}». Бот видит всё, что открыто этой интеграции."}
+        return {"ok": True, "detail": f"{where}, {integration}. " + say(
+            "Бот видит всё, что открыто этой интеграции.", "The bot sees everything open to this integration.")}
     seen = 0
     for root in sorted(ROOTS):
         for kind in ("page", "database", "data_source"):
@@ -427,8 +437,10 @@ def check():
             except NotionError:
                 continue
     sees = visible(seen, len(ROOTS), one="указанную страницу или базу", many="указанные страницы и базы",
-                   many_of="указанных страниц и баз", fix="Подключите их к интеграции в самом Notion.")
-    return {"ok": True, "detail": f"{where}, интеграция «{me['name']}». {sees}"}
+                   many_of="указанных страниц и баз", fix="Подключите их к интеграции в самом Notion.",
+                   en=dict(one="the listed page or database", many="listed pages and databases",
+                           fix="Connect them to the integration in Notion itself."))
+    return {"ok": True, "detail": f"{where}, {integration}. {sees}"}
 
 
 @plugin.poll
@@ -453,7 +465,7 @@ def poll(since):
                 if e:
                     events.append(e)
         except NotionError as exc:
-            plugin.log(f"страница {page} не прочитана: {exc}")
+            plugin.log(say(f"страница {page} не прочитана: {exc}", f"page {page} could not be read: {exc}"))
     return events
 
 
@@ -483,11 +495,12 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
         # asked for — the text itself, not a picture of it; the PDF goes on the
         # page as a file for those who want one.
         doc = document or {}
-        title = str(doc.get("title") or (attachment or {}).get("filename") or "Исследование")
+        title = str(doc.get("title") or (attachment or {}).get("filename") or say("Исследование", "Research"))
         made = create_child_page(page, title, str(doc.get("markdown") or ""))
         if attachment:
             attach_pdf(bare_id(made["id"]), attachment)
-        notes.append(f"Отчёт — на странице «{title}»: {made.get('url', '')}")
+        notes.append(say(f"Отчёт — на странице «{title}»: {made.get('url', '')}",
+                         f"The report is on the page “{title}”: {made.get('url', '')}"))
     rich = comment_rich(text, link, notes)
     if not rich:
         return {"ok": True}
@@ -495,12 +508,7 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     return {"ok": True}
 
 
-@plugin.tool(description="Найти страницы и базы данных Notion по словам — в заголовках И в тексте страниц "
-                         "области (сам Notion ищет только по заголовкам; текст интеграция читает и ищет "
-                         "сама, слова сравниваются по основе, так что падежи не мешают). Использовать "
-                         "ПЕРВЫМ делом, когда вопрос касается требований, регламентов, решений или того, "
-                         "«как у нас принято»; затем читать найденное get_page или query_database.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["query"], "additionalProperties": False})
@@ -517,9 +525,9 @@ def search_pages(query: str = "", limit: int = 20):
         if not in_area("page" if kind == "page" else "data_source", rid):
             continue
         seen.add(rid)
-        out.append({"key": rid, "kind": "страница" if kind == "page" else "база данных",
+        out.append({"key": rid, "kind": _kind(kind == "page"),
                     "title": title_of(r), "url": r.get("url", ""), "updated": r.get("last_edited_time", ""),
-                    "matched": "заголовок"})
+                    "matched": say("заголовок", "title")})
     # Then the text of every page of the area that the title search did not
     # already find — read once per edit, so the second question is cheap.
     words = words_of(query)
@@ -530,25 +538,25 @@ def search_pages(query: str = "", limit: int = 20):
         try:
             text = page_markdown(page)
         except NotionError as exc:
-            plugin.log(f"страница {page} не прочитана для поиска: {exc}")
+            plugin.log(say(f"страница {page} не прочитана для поиска: {exc}",
+                           f"page {page} could not be read for search: {exc}"))
             continue
         score = match_score(text, words)
         if score:
             meta = page_meta(page)
-            scored.append((score, {"key": page, "kind": "страница", "title": title_of(meta),
+            scored.append((score, {"key": page, "kind": _kind(True), "title": title_of(meta),
                                    "url": meta.get("url", ""), "updated": meta.get("last_edited_time", ""),
-                                   "matched": "текст", "excerpt": excerpt(text, words)}))
+                                   "matched": say("текст", "text"), "excerpt": excerpt(text, words)}))
     scored.sort(key=lambda s: -s[0])
     out.extend(item for _, item in scored)
     return {"total": len(out), "results": out,
-            "note": "Совпадения по заголовку — от Notion, по тексту — из прочитанных страниц области; "
-                    "читайте найденное get_page."}
+            "note": say("Совпадения по заголовку — от Notion, по тексту — из прочитанных страниц области; "
+                        "читайте найденное get_page.",
+                        "Title matches come from Notion, text matches from the area's pages read; "
+                        "read what was found with get_page.")}
 
 
-@plugin.tool(description="Прочитать страницу Notion целиком — текст с заголовками, списками, таблицами и "
-                         "кодом — вместе с обсуждением. Использовать, когда поиск нашёл подходящую "
-                         "страницу или когда в вопросе назвали её адрес.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_page(key: str = ""):
@@ -582,9 +590,7 @@ def comments_view(page: str) -> list[dict]:
     return out
 
 
-@plugin.tool(description="Перечислить вложенные страницы и базы данных раздела. Использовать, когда ответ "
-                         "собирается из нескольких страниц одного раздела.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_page_children(key: str = ""):
@@ -595,14 +601,12 @@ def get_page_children(key: str = ""):
         kind = b.get("type")
         if kind in ("child_page", "child_database"):
             kids.append({"key": bare_id(b.get("id", "")),
-                         "kind": "страница" if kind == "child_page" else "база данных",
+                         "kind": _kind(kind == "child_page"),
                          "title": str((b.get(kind) or {}).get("title") or "")})
     return {"total": len(kids), "children": kids}
 
 
-@plugin.tool(description="Устройство базы данных Notion: её источники данных и свойства с типами. "
-                         "Использовать перед query_database, чтобы знать, по какому свойству фильтровать.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_database(key: str = ""):
@@ -618,9 +622,7 @@ def get_database(key: str = ""):
     return {"key": db_id, "title": title_of(db), "url": db.get("url", ""), "data_sources": sources}
 
 
-@plugin.tool(description="Прочитать записи базы данных Notion (по ключу базы или источника данных), при "
-                         "желании отфильтровав по значению одного свойства. Каждая запись — её свойства текстом.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "property": {"type": "string"},
                                     "contains": {"type": "string"}, "limit": {"type": "integer"}},
@@ -642,16 +644,15 @@ def query_database(key: str = "", property: str = "", contains: str = "", limit:
             schema = api("GET", "/v1/data_sources/" + dashed(ds)).get("properties") or {}
             kind = str((schema.get(property) or {}).get("type") or "")
             if not kind:
-                raise RuntimeError(f"в базе нет свойства «{property}»; есть: {', '.join(schema)}")
+                raise RuntimeError(say(f"в базе нет свойства «{property}»; есть: {', '.join(schema)}",
+                                       f"the database has no property “{property}”; it has: {', '.join(schema)}"))
             body["filter"] = query_filter(property, kind, contains)
         res = api("POST", f"/v1/data_sources/{dashed(ds)}/query", body)
         rows.extend(row_of(p) for p in res.get("results") or [] if p.get("object") == "page")
     return {"total": len(rows), "rows": rows}
 
 
-@plugin.tool(description="Обсуждения страницы Notion: ветки комментариев, кто и когда писал. Использовать, "
-                         "когда важно, что уже обсуждали по этой странице.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_comments(key: str = ""):
@@ -660,9 +661,7 @@ def get_comments(key: str = ""):
     return {"key": page, "comments": comments_view(page)}
 
 
-@plugin.tool(description="Написать комментарий на странице Notion — или ответить в ветке, если ключ вида "
-                         "СТРАНИЦА#обсуждение.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})
@@ -671,10 +670,7 @@ def add_comment(key: str = "", text: str = ""):
     return {"ok": True}
 
 
-@plugin.tool(description="Создать дочернюю страницу Notion из markdown внутри области подключения — под "
-                         "указанной родительской страницей. Использовать, когда результат нужно оставить в "
-                         "Notion документом, а не комментарием.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"parent": {"type": "string"}, "title": {"type": "string"},
                                     "markdown": {"type": "string"}},

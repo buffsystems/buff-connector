@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // Streamer reads a streamed answer (natslink.Link does).
@@ -35,6 +37,7 @@ var modelCalls = map[string]string{
 }
 
 func openAIError(w http.ResponseWriter, status int, kind, message string) {
+	message = i18n.Localize(i18n.Default(), message)
 	writeJSON(w, status, map[string]any{"error": map[string]any{"message": message, "type": kind}})
 }
 
@@ -105,6 +108,8 @@ func listModels(w http.ResponseWriter, r *http.Request, link Requester, token, o
 	// The name Buff Code shows for a model is the backend's (#435): the tariff for our model,
 	// the model itself only where the organisation chose it.
 	names, _ := reply["names"].(map[string]any)
+	// What each model reads and writes (#27), as OpenRouter spells it in its own list.
+	modalities, _ := reply["modalities"].(map[string]any)
 	data := []map[string]any{}
 	if list, ok := reply["models"].([]any); ok {
 		for _, m := range list {
@@ -112,6 +117,10 @@ func listModels(w http.ResponseWriter, r *http.Request, link Requester, token, o
 				model := map[string]any{"id": id, "object": "model", "owned_by": "buff"}
 				if name, ok := names[id].(string); ok && name != "" {
 					model["name"] = name
+				}
+				if m, ok := modalities[id].(map[string]any); ok {
+					model["input_modalities"] = m["input"]
+					model["output_modalities"] = m["output"]
 				}
 				data = append(data, model)
 			}

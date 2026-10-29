@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import struct
 
+from buff_plugin import say
+
 MAGIC = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
 END = 0xFFFFFFFE  # end of chain
 FREE = 0xFFFFFFFF
@@ -17,7 +19,8 @@ FREE = 0xFFFFFFFF
 class Compound:
     def __init__(self, data: bytes) -> None:
         if data[:8] != MAGIC:
-            raise ValueError("файл не является документом Office 97–2003 (нет сигнатуры OLE)")
+            raise ValueError(say("файл не является документом Office 97–2003 (нет сигнатуры OLE)",
+                                 "the file is not an Office 97–2003 document (no OLE signature)"))
         self.data = data
         self.sector = 1 << struct.unpack_from("<H", data, 30)[0]
         self.mini_sector = 1 << struct.unpack_from("<H", data, 32)[0]
@@ -101,4 +104,4 @@ class Compound:
                 if d["size"] < self.mini_cutoff:
                     return self._mini_chain(d["start"], d["size"])
                 return self._chain(d["start"], d["size"])
-        raise KeyError(f"в файле нет потока {name!r}")
+        raise KeyError(say(f"в файле нет потока {name!r}", f"the file has no stream {name!r}"))

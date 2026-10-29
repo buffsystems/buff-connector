@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from urllib.parse import quote, urljoin
 
-from buff_plugin import HostError, Plugin, plural
+from buff_plugin import HostError, Plugin, plural, plural_en, say
 
 import engines
 from page import media_type, page_text
@@ -60,7 +60,8 @@ def stop_word_in(text: str) -> str:
 def refuse_if_stopped(text: str, what: str) -> None:
     word = stop_word_in(text)
     if word:
-        raise RuntimeError(f"{what} содержит стоп-слово «{word}» — администратор коннектора запретил его")
+        raise RuntimeError(say(f"{what} содержит стоп-слово «{word}» — администратор коннектора запретил его",
+                               f"{what} contains the stop word “{word}” — the connector's administrator forbade it"))
 
 
 # ---- search ---------------------------------------------------------------
@@ -68,7 +69,8 @@ def refuse_if_stopped(text: str, what: str) -> None:
 def search_url(engine: str, query: str) -> str:
     base = BASES.get(engine, "")
     if not base:
-        raise RuntimeError(f"для движка {engine} не задан адрес в настройках подключения")
+        raise RuntimeError(say(f"для движка {engine} не задан адрес в настройках подключения",
+                               f"no address is set for the {engine} engine in the connection's settings"))
     q = quote(query, safe="")
     if engine == "duckduckgo":
         return f"{base}/html/?q={q}"
@@ -76,7 +78,7 @@ def search_url(engine: str, query: str) -> str:
         return f"{base}/search?q={q}&format=json"
     if engine == "brave":
         return f"{base}/res/v1/web/search?q={q}&count=20"
-    raise RuntimeError(f"неизвестный движок {engine}")
+    raise RuntimeError(say(f"неизвестный движок {engine}", f"unknown engine {engine}"))
 
 
 def run_search(query: str) -> list[dict]:
@@ -104,25 +106,19 @@ def filter_results(results: list[dict]) -> tuple[list[dict], int]:
 
 
 @plugin.tool(
-    description=(
-        "Search the public internet. Reach for it when the answer depends on information that is "
-        "current, external or absent from the project and the knowledge base: a library's release "
-        "notes, an error message, a standard, a vendor's documentation, a price, a date. Returns "
-        "titles, addresses and snippets; read a promising one with web_fetch. Results the "
-        "administrator's lists exclude are not shown."),
     read_only=True,
     schema={"type": "object", "properties": {
-        "query": {"type": "string", "description": "What to search for, as you would type it"},
+        "query": {"type": "string"},
     }, "required": ["query"], "additionalProperties": False},
 )
 def web_search(query: str = ""):
     if not query.strip():
-        raise RuntimeError("пустой запрос")
-    refuse_if_stopped(query, "запрос")
+        raise RuntimeError(say("пустой запрос", "an empty query"))
+    refuse_if_stopped(query, say("запрос", "the query"))
     try:
         results = run_search(query)
     except HostError as exc:
-        raise RuntimeError(f"коннектор отказал: {exc}") from exc
+        raise RuntimeError(say(f"коннектор отказал: {exc}", f"the connector refused: {exc}")) from exc
     kept, hidden = filter_results(results)
     out = {"engine": ENGINE, "query": query, "results": kept}
     if hidden:
@@ -134,7 +130,7 @@ def web_search(query: str = ""):
 
 def fetch(url: str) -> dict:
     """One GET with the host's checks — and each redirect hop is another."""
-    refuse_if_stopped(url, "адрес")
+    refuse_if_stopped(url, say("адрес", "the address"))
     current = url
     for _ in range(REDIRECT_HOPS):
         res = plugin.http("GET", current, headers=ACCEPT_HTML)
@@ -142,7 +138,7 @@ def fetch(url: str) -> dict:
         location = _header(res, "Location")
         if status in (301, 302, 303, 307, 308) and location:
             current = urljoin(current, location)
-            refuse_if_stopped(current, "адрес")
+            refuse_if_stopped(current, say("адрес", "the address"))
             continue
         content_type = _header(res, "Content-Type")
         title, text = page_text(content_type, res.get("body", ""))
@@ -152,7 +148,8 @@ def fetch(url: str) -> dict:
         if title:
             out["title"] = title
         return out
-    raise RuntimeError(f"{url}: цепочка перенаправлений длиннее {REDIRECT_HOPS} — похоже на петлю")
+    raise RuntimeError(say(f"{url}: цепочка перенаправлений длиннее {REDIRECT_HOPS} — похоже на петлю",
+                           f"{url}: a redirect chain longer than {REDIRECT_HOPS} — looks like a loop"))
 
 
 def _header(res: dict, name: str) -> str:
@@ -163,24 +160,18 @@ def _header(res: dict, name: str) -> str:
 
 
 @plugin.tool(
-    description=(
-        "Read a public web page by address — documentation, an article, a README, a JSON answer. "
-        "Use it the moment you have an address: from the task, from the conversation or from "
-        "web_search. HTML comes back as text with headings, lists, tables and links kept; the whole "
-        "page, never trimmed. An address the administrator's lists exclude, an internal address, or "
-        "a content type outside the allowed ones is refused with the reason."),
     read_only=True,
     schema={"type": "object", "properties": {
-        "url": {"type": "string", "description": "Full address, with http:// or https://"},
+        "url": {"type": "string"},
     }, "required": ["url"], "additionalProperties": False},
 )
 def web_fetch(url: str = ""):
     if not url.strip():
-        raise RuntimeError("пустой адрес")
+        raise RuntimeError(say("пустой адрес", "an empty address"))
     try:
         return fetch(url.strip())
     except HostError as exc:
-        raise RuntimeError(f"коннектор отказал: {exc}") from exc
+        raise RuntimeError(say(f"коннектор отказал: {exc}", f"the connector refused: {exc}")) from exc
 
 
 # ---- check ----------------------------------------------------------------
@@ -192,10 +183,13 @@ def check():
     except engines.Challenge as exc:
         return {"ok": False, "detail": str(exc)}
     except (HostError, RuntimeError) as exc:
-        return {"ok": False, "detail": f"Поиск {ENGINE_NAMES.get(ENGINE, ENGINE)} не ответил: {exc}"}
+        name = ENGINE_NAMES.get(ENGINE, ENGINE)
+        return {"ok": False, "detail": say(f"Поиск {name} не ответил: {exc}", f"{name} search did not answer: {exc}")}
     n = len(results)
-    return {"ok": True, "detail": f"Поиск {ENGINE_NAMES.get(ENGINE, ENGINE)} работает: на пробный запрос — "
-                                  f"{n} {plural(n, 'результат', 'результата', 'результатов')}."}
+    name = ENGINE_NAMES.get(ENGINE, ENGINE)
+    return {"ok": True, "detail": say(
+        f"Поиск {name} работает: на пробный запрос — {n} {plural(n, 'результат', 'результата', 'результатов')}.",
+        f"{name} search works: {n} {plural_en(n, 'result', 'results')} for a test query.")}
 
 
 if __name__ == "__main__":

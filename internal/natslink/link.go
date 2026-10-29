@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // Link is a guest connection to the middleware relay.
@@ -42,7 +44,7 @@ func ConnectGuest(rawURL string, timeout time.Duration) (*Link, error) {
 	}
 	nc, err := nats.Connect(dial, opts...)
 	if err != nil {
-		return nil, fmt.Errorf("connect middleware: %w", err)
+		return nil, fmt.Errorf("подключение к relay: %w", err)
 	}
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -83,7 +85,7 @@ func (l *Link) Request(ctx context.Context, subject string, payload map[string]a
 	reply := replySubject(l.gid, seq)
 	sub, err := l.nc.SubscribeSync(reply)
 	if err != nil {
-		return nil, fmt.Errorf("subscribe reply: %w", err)
+		return nil, fmt.Errorf("подписка на ответ: %w", err)
 	}
 	defer func() { _ = sub.Unsubscribe() }()
 
@@ -92,7 +94,7 @@ func (l *Link) Request(ctx context.Context, subject string, payload map[string]a
 		return nil, err
 	}
 	if err := l.nc.Publish(subject, body); err != nil {
-		return nil, fmt.Errorf("publish %s: %w", subject, err)
+		return nil, fmt.Errorf("отправка %s: %w", subject, err)
 	}
 	_ = l.nc.Flush()
 
@@ -106,7 +108,7 @@ func (l *Link) Request(ctx context.Context, subject string, payload map[string]a
 	for {
 		msg, err := sub.NextMsgWithContext(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("await reply to %s: %w", subject, err)
+			return nil, fmt.Errorf("ожидание ответа на %s: %w", subject, err)
 		}
 		ev, err := a.feed(msg.Data)
 		if err != nil {
@@ -127,13 +129,13 @@ func (l *Link) Request(ctx context.Context, subject string, payload map[string]a
 func decodeReply(subject string, body []byte) (map[string]any, error) {
 	var m map[string]any
 	if err := json.Unmarshal(body, &m); err != nil {
-		return nil, fmt.Errorf("parse reply: %w", err)
+		return nil, fmt.Errorf("разбор ответа: %w", err)
 	}
 	if e, ok := m["error"]; ok && e != nil {
 		return m, fmt.Errorf("%s: %v", subject, e)
 	}
 	if ok, present := m["ok"].(bool); present && !ok {
-		return m, fmt.Errorf("%s failed", subject)
+		return m, fmt.Errorf("%s не удалось", subject)
 	}
 	return m, nil
 }
@@ -155,7 +157,7 @@ func (l *Link) Stream(ctx context.Context, subject string, payload map[string]an
 	reply := replySubject(l.gid, seq)
 	sub, err := l.nc.SubscribeSync(reply)
 	if err != nil {
-		return fmt.Errorf("subscribe reply: %w", err)
+		return fmt.Errorf("подписка на ответ: %w", err)
 	}
 	defer func() { _ = sub.Unsubscribe() }()
 	body, err := envelope(payload, reply)
@@ -163,7 +165,7 @@ func (l *Link) Stream(ctx context.Context, subject string, payload map[string]an
 		return err
 	}
 	if err := l.nc.Publish(subject, body); err != nil {
-		return fmt.Errorf("publish %s: %w", subject, err)
+		return fmt.Errorf("отправка %s: %w", subject, err)
 	}
 	_ = l.nc.Flush()
 
@@ -173,7 +175,7 @@ func (l *Link) Stream(ctx context.Context, subject string, payload map[string]an
 	resume := func() {
 		if asked != a.nextSeq {
 			asked = a.nextSeq
-			log.Printf("%s: кадр %d потока не пришёл — прошу дослать", subject, a.nextSeq)
+			log.Print(i18n.Sprintf("%s: кадр %d потока не пришёл — прошу дослать", subject, a.nextSeq))
 			l.control(a.streamID, map[string]any{"resume": a.nextSeq})
 		}
 	}

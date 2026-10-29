@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	yaml "gopkg.in/yaml.v3"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 func customServer() PluginInstance {
@@ -50,7 +52,7 @@ func TestACustomServerNeedsNoPluginButNeedsConsent(t *testing.T) {
 			p := customServer()
 			c.edit(&p)
 			err := p.validate()
-			if err == nil || !strings.Contains(err.Error(), c.want) {
+			if err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), c.want) {
 				t.Fatalf("err = %v, want it to mention %q", err, c.want)
 			}
 		})

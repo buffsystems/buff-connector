@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 
-from buff_plugin import moment
+from buff_plugin import moment, say
 
 # A Notion id is 32 hex digits, written with dashes as a UUID in the API and
 # without them in a browser address — where it is glued to the page's title:
@@ -30,7 +30,7 @@ def bare_id(value) -> str:
     """
     text = str(value or "").strip()
     if not text:
-        raise ValueError("пустая ссылка или идентификатор Notion")
+        raise ValueError(say("пустая ссылка или идентификатор Notion", "an empty Notion link or id"))
     path, _, query = text.partition("?")
     for pair in query.split("&"):
         key, _, val = pair.partition("=")
@@ -38,7 +38,7 @@ def bare_id(value) -> str:
             return bare_id(val)
     runs = _HEX_RUN.findall(path.split("#")[0].replace("-", ""))
     if not runs:
-        raise ValueError(f"{text} — не ссылка и не идентификатор Notion")
+        raise ValueError(say(f"{text} — не ссылка и не идентификатор Notion", f"{text} is neither a Notion link nor an id"))
     return runs[-1][-32:].lower()
 
 
@@ -116,7 +116,7 @@ def property_text(prop: dict | None) -> str:
         start, end = str(val.get("start") or ""), val.get("end")
         return f"{start} → {end}" if end else start
     if kind == "checkbox":
-        return "да" if val else "нет"
+        return say("да", "yes") if val else say("нет", "no")
     if kind in ("url", "email", "phone_number"):
         return str(val or "")
     if kind in ("people", "created_by", "last_edited_by"):
@@ -131,7 +131,7 @@ def property_text(prop: dict | None) -> str:
         if itype == "string":
             return str(inner.get("string") or "")
         if itype == "boolean":
-            return "да" if inner.get("boolean") else "нет"
+            return say("да", "yes") if inner.get("boolean") else say("нет", "no")
         if itype == "array":
             return "; ".join(property_text(v) for v in inner.get("array") or [])
         return property_text({"type": itype, itype: inner.get(itype)}) if itype else ""
@@ -175,10 +175,12 @@ def query_filter(name: str, kind: str, contains: str) -> dict:
         try:
             return {"property": name, "number": {"equals": float(contains)}}
         except ValueError as exc:
-            raise ValueError(f"свойство «{name}» числовое, а «{contains}» — не число") from exc
+            raise ValueError(say(f"свойство «{name}» числовое, а «{contains}» — не число",
+                                 f"property “{name}” is numeric, and “{contains}” is not a number")) from exc
     if kind == "checkbox":
         return {"property": name, "checkbox": {"equals": contains.strip().lower() in ("да", "yes", "true", "1")}}
-    raise ValueError(f"по свойству «{name}» типа {kind} фильтр не поддерживается — читайте без фильтра")
+    raise ValueError(say(f"по свойству «{name}» типа {kind} фильтр не поддерживается — читайте без фильтра",
+                         f"filtering by property “{name}” of type {kind} is not supported — read without a filter"))
 
 
 def webhook_event(body: str) -> dict | None:

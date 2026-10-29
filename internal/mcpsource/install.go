@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // Runner executes one command in dir and returns everything it printed. It is
@@ -74,7 +76,7 @@ func (l Launch) Needs(tc Toolchain) error {
 func ResolveCommand(command string, tc Toolchain, lookPath func(string) (string, error)) (string, error) {
 	pick := func(p string) (string, error) {
 		if p == "" {
-			return "", fmt.Errorf("команда %q не найдена на этой машине (или недоступна пользователю подключения)", command)
+			return "", problem.New("command_runtime_missing", command)
 		}
 		return p, nil
 	}
@@ -95,8 +97,7 @@ func ResolveCommand(command string, tc Toolchain, lookPath func(string) (string,
 	}
 	p, err := lookPath(command)
 	if err != nil {
-		return "", fmt.Errorf("команда %q не найдена на этой машине: поставьте её так, чтобы коннектор "+
-			"видел её в PATH, или укажите полный путь", command)
+		return "", problem.New("command_not_found", command)
 	}
 	return p, nil
 }

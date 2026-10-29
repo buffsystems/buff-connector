@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/buffsystems/buff-connector/internal/catalog"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/oci"
 )
 
@@ -20,22 +20,22 @@ import (
 // The files are byte for byte the ones `buffpub index` produced and signed — the
 // registry is transport, and the connector still verifies our signature itself.
 func pushCmd(args []string) {
-	flags := flag.NewFlagSet("push", flag.ExitOnError)
-	dir := flags.String("dist", "dist", "directory produced by build + index")
-	registry := flags.String("registry", "", "registry host, e.g. registry.buff.systems")
-	prefix := flags.String("prefix", "buff/plugins", "repository prefix inside the registry")
-	plain := flags.Bool("plain", false, "talk http instead of https (a registry on the loopback)")
-	_ = flags.Parse(args)
+	flags := i18n.Flags("push")
+	dir := flags.String("dist", "dist", i18n.T("каталог, который собрали build и index"))
+	registry := flags.String("registry", "", i18n.T("адрес реестра, например registry.buff.systems"))
+	prefix := flags.String("prefix", "buff/plugins", i18n.T("префикс репозитория в реестре"))
+	plain := flags.Bool("plain", false, i18n.T("http вместо https (реестр на локальном адресе)"))
+	i18n.ParseFlags(flags, args)
 
 	if *registry == "" {
-		die(fmt.Errorf("--registry is required"))
+		die(fmt.Errorf("нужен --registry"))
 	}
 	cl := oci.New(*registry)
 	cl.Plain = *plain
 	// Publishing needs an account; reading the catalogue never does.
 	cl.User, cl.Pass = os.Getenv("BUFF_REGISTRY_USER"), os.Getenv("BUFF_REGISTRY_PASS")
 	if cl.User == "" {
-		die(fmt.Errorf("set BUFF_REGISTRY_USER and BUFF_REGISTRY_PASS"))
+		die(fmt.Errorf("задайте BUFF_REGISTRY_USER и BUFF_REGISTRY_PASS"))
 	}
 
 	pushed, err := pushDist(context.Background(), cl, strings.Trim(*prefix, "/"), *dir)
@@ -43,7 +43,7 @@ func pushCmd(args []string) {
 		die(err)
 	}
 	for _, p := range pushed {
-		fmt.Println("published", p)
+		fmt.Println(i18n.T("опубликовано"), p)
 	}
 }
 
@@ -108,7 +108,7 @@ func readSigned(dir, name string) (body, sig []byte, err error) {
 		return nil, nil, err
 	}
 	if sig, err = os.ReadFile(filepath.Join(dir, name+".sig")); err != nil {
-		return nil, nil, fmt.Errorf("%s is not signed: %w", name, err)
+		return nil, nil, fmt.Errorf("%s не подписан: %w", name, err)
 	}
 	return body, sig, nil
 }
@@ -121,12 +121,12 @@ func readSigned(dir, name string) (body, sig []byte, err error) {
 // connected connector would install, and then two customers would be running
 // different bytes under the same version number.
 func kitCmd(args []string) {
-	flags := flag.NewFlagSet("kit", flag.ExitOnError)
-	out := flags.String("out", "kit", "directory to write the kit into")
-	registry := flags.String("registry", "registry.buff.systems", "registry to pull from")
-	prefix := flags.String("prefix", "buff/plugins", "repository prefix inside the registry")
-	plain := flags.Bool("plain", false, "talk http instead of https")
-	_ = flags.Parse(args)
+	flags := i18n.Flags("kit")
+	out := flags.String("out", "kit", i18n.T("каталог, куда записать набор"))
+	registry := flags.String("registry", "registry.buff.systems", i18n.T("реестр, из которого брать"))
+	prefix := flags.String("prefix", "buff/plugins", i18n.T("префикс репозитория в реестре"))
+	plain := flags.Bool("plain", false, i18n.T("http вместо https"))
+	i18n.ParseFlags(flags, args)
 
 	cl := oci.New(*registry)
 	cl.Plain = *plain
@@ -134,8 +134,8 @@ func kitCmd(args []string) {
 	if err != nil {
 		die(err)
 	}
-	fmt.Printf("офлайн-комплект готов: %d файл(ов) в %s\n", len(files), *out)
-	fmt.Println("на машине без сети: BUFF_CATALOG_URL=file://<путь> connector install <плагин> --config <файл>")
+	fmt.Print(i18n.Sprintf("офлайн-комплект готов: %d файл(ов) в %s\n", len(files), *out))
+	fmt.Println(i18n.T("на машине без сети: BUFF_CATALOG_URL=file://<путь> connector install <плагин> --config <файл>"))
 }
 
 // pullKit copies the published catalogue and its bundles into a directory.
@@ -167,7 +167,7 @@ func pullKit(ctx context.Context, cl *oci.Client, prefix, out string) ([]string,
 	}
 	var idx catalog.Index
 	if err := json.Unmarshal(idxRaw, &idx); err != nil {
-		return nil, fmt.Errorf("published catalogue is not readable: %w", err)
+		return nil, fmt.Errorf("опубликованный каталог не читается: %w", err)
 	}
 
 	// Bundles first, catalogue last — the same order publishing uses, and for

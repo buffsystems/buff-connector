@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import Callable, Iterator
 
 from area import Location
+from buff_plugin import say
 from smb.smb_structs import OperationFailure
 from smb2first import Smb2Connection
 
@@ -106,7 +107,8 @@ class Smb:
         conn = Smb2Connection(user, cred.get("password", ""), "buff-connector", server, domain=domain,
                               use_ntlm_v2=True, is_direct_tcp=True)
         if not conn.connect(server, 445):
-            raise ConnectionError(f"{server}: сервер отказал во входе (проверьте учётную запись и пароль)")
+            raise ConnectionError(say(f"{server}: сервер отказал во входе (проверьте учётную запись и пароль)",
+                                      f"{server}: the server refused the sign-in (check the account and the password)"))
         self._conns[server] = conn
         return conn
 

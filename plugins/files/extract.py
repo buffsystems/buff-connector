@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import posixpath
 
+from buff_plugin import say
+
 import doc
 import docx
 import pdf
@@ -24,6 +26,12 @@ OOXML = {".docx": ("документ Word", docx.text_of), ".docm": ("докум
 OLE = {".doc": ("документ Word 97–2003", doc.text_of), ".dot": ("шаблон Word 97–2003", doc.text_of),
        ".xls": ("таблица Excel 97–2003", xls.text_of), ".xlt": ("шаблон Excel 97–2003", xls.text_of),
        ".ppt": ("презентация PowerPoint 97–2003", ppt.text_of), ".pps": ("презентация PowerPoint 97–2003", ppt.text_of)}
+# The kinds above in English, for a reader of English (#565).
+KIND_EN = {"документ Word": "Word document", "таблица Excel": "Excel spreadsheet",
+           "презентация PowerPoint": "PowerPoint presentation", "документ Word 97–2003": "Word 97–2003 document",
+           "шаблон Word 97–2003": "Word 97–2003 template", "таблица Excel 97–2003": "Excel 97–2003 spreadsheet",
+           "шаблон Excel 97–2003": "Excel 97–2003 template",
+           "презентация PowerPoint 97–2003": "PowerPoint 97–2003 presentation", "PDF": "PDF"}
 TEXT = {".txt", ".md", ".markdown", ".csv", ".tsv", ".json", ".xml", ".yaml", ".yml", ".ini", ".cfg", ".conf",
         ".toml", ".log", ".html", ".htm", ".rst", ".sql", ".py", ".js", ".ts", ".go", ".java", ".c", ".h",
         ".cpp", ".cs", ".rb", ".php", ".sh", ".bat", ".ps1", ".tex", ".adoc", ".properties", ".env", ".svg"}
@@ -40,39 +48,45 @@ def text_of(name: str, data: bytes) -> str:
         kind, reader = OOXML.get(ext, ("", None)) if ext in OOXML else _ooxml_by_content(data)
         if reader:
             return _run(kind, reader, data)
-        raise Unreadable(f"архив zip, {len(data)} байт")
+        raise Unreadable(say(f"архив zip, {len(data)} байт", f"a zip archive, {len(data)} bytes"))
     if data[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
         kind, reader = OLE.get(ext, ("", None)) if ext in OLE else _ole_by_content(data)
         if reader:
             return _run(kind, reader, data)
-        raise Unreadable(f"файл OLE неизвестного вида, {len(data)} байт")
+        raise Unreadable(say(f"файл OLE неизвестного вида, {len(data)} байт", f"an OLE file of an unknown kind, {len(data)} bytes"))
     if data[:5] == b"%PDF-":
         return _run("PDF", pdf.text_of, data)
     if ext in TEXT or _looks_like_text(data):
         return _decode(data)
-    raise Unreadable(f"двоичный файл{(' ' + ext) if ext else ''}, {len(data)} байт")
+    suffix = f" {ext}" if ext else ""
+    raise Unreadable(say(f"двоичный файл{suffix}, {len(data)} байт", f"a binary file{suffix}, {len(data)} bytes"))
 
 
 def kind_of(name: str) -> str:
     ext = posixpath.splitext(name)[1].lower()
     if ext in OOXML:
-        return OOXML[ext][0]
+        return _kind(OOXML[ext][0])
     if ext in OLE:
-        return OLE[ext][0]
+        return _kind(OLE[ext][0])
     if ext == ".pdf":
         return "PDF"
     if ext in TEXT:
-        return "текст"
-    return ext.lstrip(".") or "файл"
+        return say("текст", "text")
+    return ext.lstrip(".") or say("файл", "file")
+
+
+def _kind(ru: str) -> str:
+    return say(ru, KIND_EN.get(ru, ru))
 
 
 def _run(kind: str, reader, data: bytes) -> str:
     try:
         return reader(data)
     except ValueError as exc:
-        raise Unreadable(f"{kind}: {exc}") from exc
+        raise Unreadable(f"{_kind(kind)}: {exc}") from exc
     except Exception as exc:  # a malformed file must name itself, not crash the tool
-        raise Unreadable(f"{kind}: не разбирается ({type(exc).__name__}: {exc})") from exc
+        why = f"{type(exc).__name__}: {exc}"
+        raise Unreadable(say(f"{kind}: не разбирается ({why})", f"{_kind(kind)}: does not parse ({why})")) from exc
 
 
 def _ooxml_by_content(data: bytes):

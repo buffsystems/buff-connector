@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/oci/ocitest"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
@@ -92,7 +93,7 @@ func TestACatalogueSignedByAnotherKeyIsRefused(t *testing.T) {
 
 	c := New("oci+http://"+reg.Host()+"/buff/plugins", []string{otherPub}, t.TempDir())
 	_, err := c.Fetch(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "signature") {
+	if err == nil || !strings.Contains(i18n.LocalizeError(i18n.EN, err), "signature") {
 		t.Fatalf("err = %v, want a refusal naming the signature", err)
 	}
 }

@@ -2,29 +2,29 @@ package plugin
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // ErrNoPrivilege means the connector cannot put a plugin under its own OS user.
 // We refuse to run plugins at all in that case: running them under the
 // connector's own uid would give them the identity seed and every provider token,
 // which is exactly the isolation we promise.
-var ErrNoPrivilege = errors.New("cannot run plugins isolated")
+var ErrNoPrivilege = problem.New("no_isolation")
 
 // Privilege is what this process is actually able to do, decided once at start
 // so the operator learns about it immediately instead of at the first install.
 type Privilege struct {
 	CanSwitchUID bool
 	// Reason explains a refusal in the operator's terms, e.g. "connector runs as
-	// uid 1000; plugin isolation needs root or CAP_SETUID".
-	Reason string
+	// uid 1000; plugin isolation needs root or CAP_SETUID". Nil when it can.
+	Reason error
 }
 
 // Spec describes one plugin process.
@@ -66,10 +66,10 @@ type Process struct {
 func (s *Starter) Start(ctx context.Context, spec Spec) (*Process, error) {
 	if spec.UID != 0 && !s.Priv.CanSwitchUID {
 		reason := s.Priv.Reason
-		if reason == "" {
-			reason = "this process cannot change a child's user"
+		if reason == nil {
+			reason = problem.New("no_isolation_child")
 		}
-		return nil, fmt.Errorf("%w: %s", ErrNoPrivilege, reason)
+		return nil, problem.Wrap("no_isolation", reason)
 	}
 
 	cmd := exec.CommandContext(ctx, spec.Path, spec.Args...)
@@ -79,18 +79,18 @@ func (s *Starter) Start(ctx context.Context, spec Spec) (*Process, error) {
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return nil, fmt.Errorf("stdin: %w", err)
+		return nil, problem.Wrap("plugin_pipe", err, "stdin")
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("stdout: %w", err)
+		return nil, problem.Wrap("plugin_pipe", err, "stdout")
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, fmt.Errorf("stderr: %w", err)
+		return nil, problem.Wrap("plugin_pipe", err, "stderr")
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start %s: %w", spec.Path, err)
+		return nil, problem.Wrap("plugin_start", err, spec.Path)
 	}
 
 	grace := s.GraceDuration
@@ -174,11 +174,11 @@ func PrepareStateDir(root string) error {
 	for _, d := range dirs {
 		path := filepath.Join(root, d.name)
 		if err := os.MkdirAll(path, d.mode); err != nil {
-			return fmt.Errorf("create %s: %w", path, err)
+			return problem.Wrap("dir_create", err, path)
 		}
 		// MkdirAll honours umask, so set the mode explicitly.
 		if err := os.Chmod(path, d.mode); err != nil {
-			return fmt.Errorf("chmod %s: %w", path, err)
+			return problem.Wrap("dir_chmod", err, path)
 		}
 	}
 	return nil
@@ -192,17 +192,17 @@ func PrepareStateDir(root string) error {
 func PrepareCodeDir(root, guid string, uid, gid uint32) (string, error) {
 	parent := filepath.Join(root, "mcp")
 	if err := os.MkdirAll(parent, 0o711); err != nil {
-		return "", fmt.Errorf("create %s: %w", parent, err)
+		return "", problem.Wrap("dir_create", err, parent)
 	}
 	if err := os.Chmod(parent, 0o711); err != nil {
-		return "", fmt.Errorf("chmod %s: %w", parent, err)
+		return "", problem.Wrap("dir_chmod", err, parent)
 	}
 	dir := filepath.Join(parent, guid)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", fmt.Errorf("create %s: %w", dir, err)
+		return "", problem.Wrap("dir_create", err, dir)
 	}
 	if err := os.Chmod(dir, 0o700); err != nil {
-		return "", fmt.Errorf("chmod %s: %w", dir, err)
+		return "", problem.Wrap("dir_chmod", err, dir)
 	}
 	if err := chownDir(dir, uid, gid); err != nil {
 		return "", err
@@ -227,10 +227,10 @@ func ChownTree(dir string, uid, gid uint32) error {
 func PrepareInstanceDir(root, guid string, uid, gid uint32) (string, error) {
 	dir := filepath.Join(root, "instances", guid)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return "", fmt.Errorf("create %s: %w", dir, err)
+		return "", problem.Wrap("dir_create", err, dir)
 	}
 	if err := os.Chmod(dir, 0o700); err != nil {
-		return "", fmt.Errorf("chmod %s: %w", dir, err)
+		return "", problem.Wrap("dir_chmod", err, dir)
 	}
 	if err := chownDir(dir, uid, gid); err != nil {
 		return "", err

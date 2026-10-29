@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // The fake plugin is this test binary re-executed with an env marker, so the
@@ -39,6 +42,10 @@ func fakePluginMain(mode string) {
 	if mode == "noisy" {
 		fmt.Fprintln(os.Stdout, "INFO plugin starting, this is not JSON")
 		out.Flush()
+	}
+	if mode == "bilingual" {
+		fakeBilingual(out)
+		return
 	}
 	if mode == "plain-mcp" || mode == "cursor-loop" {
 		fakePlainMCP(out, mode == "cursor-loop")
@@ -207,6 +214,11 @@ func fakePlainMCP(out *bufio.Writer, loop bool) {
 			}
 			serveTools(id, msg.Params)
 		case "tools/call":
+			// A server the operator brought is sent exactly what MCP defines: no _meta of ours.
+			if strings.Contains(string(msg.Params), "buff/lang") {
+				refuse(id, "tools/call carries a buff-only field")
+				continue
+			}
 			reply(id, map[string]any{"content": []any{map[string]any{"type": "text", "text": "sunny"}}})
 		default:
 			refuse(id, "unknown method "+msg.Method)
@@ -355,7 +367,7 @@ func TestInstanceRefusesToRunUnisolated(t *testing.T) {
 	}
 	spec := fakeSpec("plain")
 	spec.UID, spec.GID = 61234, 61234
-	in := NewInstance(&Starter{Priv: Privilege{CanSwitchUID: false, Reason: "connector runs as uid 1000"}},
+	in := NewInstance(&Starter{Priv: Privilege{CanSwitchUID: false, Reason: problem.New("no_isolation_uid", 1000)}},
 		InstanceConfig{GUID: "G", Slug: "fake", Spec: spec, CallTimeout: time.Second}, nil)
 	defer in.Stop()
 
@@ -369,6 +381,11 @@ func TestInstanceRefusesToRunUnisolated(t *testing.T) {
 	}
 	if !strings.Contains(st.LastError, "uid 1000") {
 		t.Errorf("state must carry the operator-facing reason, got %q", st.LastError)
+	}
+	// And the report carries it as a status, down to the reason's own code.
+	if p := st.LastProblem; p == nil || p.Code != "no_isolation" || p.Cause == nil ||
+		p.Cause.Code != "no_isolation_uid" || p.Cause.Params["uid"] != "1000" {
+		t.Errorf("LastProblem = %+v", p)
 	}
 }
 
@@ -530,7 +547,7 @@ func TestARepeatingCursorIsRefusedNotFollowedForever(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	err := in.Start(ctx)
-	if err == nil || !strings.Contains(err.Error(), "repeats cursor") {
+	if err == nil || !errors.Is(err, problem.New("tools_cursor_loop")) {
 		t.Fatalf("err = %v", err)
 	}
 }

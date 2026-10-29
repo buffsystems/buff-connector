@@ -5,13 +5,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // A remote MCP server (#351) is spoken to over the published Streamable HTTP
@@ -103,7 +104,7 @@ func (c *httpChannel) Call(ctx context.Context, method string, params, result an
 		err := c.err
 		c.mu.Unlock()
 		if err == nil {
-			err = errors.New("channel closed")
+			err = problem.New("channel_closed")
 		}
 		return err
 	}
@@ -119,7 +120,7 @@ func (c *httpChannel) Call(ctx context.Context, method string, params, result an
 		// 202 to a REQUEST: the server took it and answered nothing. It would
 		// arrive on the stream this connector does not open, so it is an error
 		// here, not a wait.
-		return fmt.Errorf("%s: the server accepted the request without answering it", method)
+		return problem.New("remote_no_answer", method)
 	}
 	if res.Error != nil {
 		return res.Error
@@ -167,7 +168,7 @@ func (c *httpChannel) post(ctx context.Context, msg request, wantID string) (*re
 		// to the stdio channel: the channel ends, the supervisor backs off and
 		// tries the handshake again — and the state says so, instead of a
 		// "running" that answers nothing.
-		err = fmt.Errorf("%s: %w", msg.Method, err)
+		err = problem.Wrap("remote_unreachable", err, msg.Method)
 		c.fail(err)
 		return nil, err
 	}
@@ -182,14 +183,14 @@ func (c *httpChannel) post(ctx context.Context, msg request, wantID string) (*re
 	case res.StatusCode == http.StatusNotFound && msg.Method != "initialize":
 		// The session is gone. Nothing on this channel can succeed any more;
 		// say so once and let the supervisor start over.
-		err := fmt.Errorf("%s: the server no longer knows this session (404)", msg.Method)
+		err := problem.New("remote_session_gone", msg.Method)
 		c.fail(err)
 		return nil, err
 	case res.StatusCode == http.StatusAccepted, res.StatusCode == http.StatusNoContent:
 		return nil, nil
 	case res.StatusCode < 200 || res.StatusCode > 299:
 		tail, _ := io.ReadAll(io.LimitReader(res.Body, 4096))
-		return nil, fmt.Errorf("%s: server answered %d: %s", msg.Method, res.StatusCode, strings.TrimSpace(string(tail)))
+		return nil, problem.New("remote_status", msg.Method, res.StatusCode, strings.TrimSpace(string(tail)))
 	}
 	if wantID == "" {
 		return nil, nil
@@ -199,7 +200,7 @@ func (c *httpChannel) post(ctx context.Context, msg request, wantID string) (*re
 	}
 	var out response
 	if err := json.NewDecoder(res.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("%s: unreadable answer: %w", msg.Method, err)
+		return nil, problem.Wrap("remote_unreadable", err, msg.Method)
 	}
 	return &out, nil
 }
@@ -254,9 +255,9 @@ func (c *httpChannel) readStream(r io.Reader, wantID string) (*response, error) 
 		return res, nil
 	}
 	if err := sc.Err(); err != nil {
-		return nil, fmt.Errorf("event stream: %w", err)
+		return nil, problem.Wrap("remote_event_stream", err)
 	}
-	return nil, errors.New("the event stream ended without the answer")
+	return nil, problem.New("remote_stream_ended")
 }
 
 // answer replies to a request the server made of us, by POST, as the

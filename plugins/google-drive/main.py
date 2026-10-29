@@ -37,7 +37,7 @@ import random
 import time
 from urllib.parse import quote, urlencode
 
-from buff_plugin import Event, Identity, Plugin, after, event_id, parse_command, source, visible
+from buff_plugin import Event, Identity, Plugin, after, event_id, parse_command, say, source, visible
 
 from content import (
     COMMENTABLE,
@@ -109,7 +109,8 @@ _floor = {"at": ""}
 
 class DriveError(RuntimeError):
     def __init__(self, status: int, path: str, body: str):
-        super().__init__(f"Google ответил {status} на {path}: {body[:300]}")
+        super().__init__(say(f"Google ответил {status} на {path}: {body[:300]}",
+                             f"Google answered {status} to {path}: {body[:300]}"))
         self.status = status
 
 
@@ -147,7 +148,7 @@ def api(method: str, url: str, body: bytes | str | None = None, *, content_type:
         if text:
             return raw
         return json.loads(raw) if raw.strip() else {}
-    raise DriveError(429, url, "лимит запросов не отпустил")
+    raise DriveError(429, url, say("лимит запросов не отпустил", "the rate limit did not let go"))
 
 
 def drive(method: str, path: str, params: dict | None = None, body: dict | None = None, *, text: bool = False):
@@ -225,7 +226,8 @@ def in_area(fid: str) -> bool:
 
 def require_area(fid: str) -> None:
     if not in_area(fid):
-        raise RuntimeError(f"{fid} вне области, разрешённой этому подключению")
+        raise RuntimeError(say(f"{fid} вне области, разрешённой этому подключению",
+                               f"{fid} is outside the area this connection is allowed"))
 
 
 def children_of(folder: str) -> list[dict]:
@@ -255,7 +257,7 @@ def area_files() -> list[dict]:
             try:
                 m = meta_of(root)
             except DriveError as exc:
-                plugin.log(f"корень {root} не прочитан: {exc}")
+                plugin.log(say(f"корень {root} не прочитан: {exc}", f"root {root} could not be read: {exc}"))
                 continue
             if m.get("mimeType") == FOLDER:
                 queue.append(root)
@@ -273,7 +275,9 @@ def area_files() -> list[dict]:
                 elif f.get("mimeType") in COMMENTABLE:
                     files.append(f)
     _area["at"], _area["files"] = time.time(), files
-    plugin.log(f"область: {len(files)} файлов с обсуждениями, перечислено за {time.time() - started:.1f} с")
+    took = time.time() - started
+    plugin.log(say(f"область: {len(files)} файлов с обсуждениями, перечислено за {took:.1f} с",
+                   f"area: {len(files)} files with discussions, listed in {took:.1f} s"))
     return files
 
 
@@ -295,7 +299,7 @@ def sheet_titles(sid: str) -> list[str]:
 def sheet_text(sid: str, ranges: list[str]) -> str:
     """The named ranges (a sheet title is a range) as markdown tables."""
     if not ranges:
-        return "(в таблице нет листов)\n"
+        return say("(в таблице нет листов)\n", "(the spreadsheet has no sheets)\n")
     got = sheets_get(sid, "/values:batchGet", {"ranges": ranges, "majorDimension": "ROWS"})
     parts = []
     for vr in got.get("valueRanges") or []:
@@ -315,7 +319,9 @@ def file_text(m: dict) -> dict:
         return {"children": [file_item(f) for f in children_of(fid)]}
     if is_text(mime):
         return {"markdown": drive("GET", f"/files/{quote(fid, safe='')}", {"alt": "media"}, text=True)}
-    return {"note": f"{kind_of(mime)} ({mime}) — текст не читается; размер {m.get('size', '?')} байт"}
+    size = m.get('size', '?')
+    return {"note": say(f"{kind_of(mime)} ({mime}) — текст не читается; размер {size} байт",
+                        f"{kind_of(mime)} ({mime}) — the text cannot be read; size {size} bytes")}
 
 
 def body_of(m: dict) -> str:
@@ -420,7 +426,7 @@ def post_comment(fid: str, content: str) -> dict:
 def upload(folder: str, name: str, target_mime: str, media_type: str, media: bytes) -> dict:
     """A file created in one multipart call; a Google type as `mimeType` makes
     Drive IMPORT the bytes — markdown becomes a document."""
-    meta: dict = {"name": name or "Без названия", "mimeType": target_mime}
+    meta: dict = {"name": name or say("Без названия", "Untitled"), "mimeType": target_mime}
     if folder:
         meta["parents"] = [folder]
     content_type, body = multipart_related(meta, media_type, media)
@@ -448,8 +454,10 @@ def check():
     whoami()
     who = f"{me['name']} ({me['email']})" if me["name"] and me["email"] else (me["name"] or me["email"])
     how = "сервисный аккаунт" if is_service_account() else "учётная запись"
+    how_en = "service account" if is_service_account() else "account"
     if not ROOTS:
-        return {"ok": True, "detail": f"Google Диск, {how} «{who}». Бот видит всё, что открыто этой учётной записи."}
+        return {"ok": True, "detail": say(f"Google Диск, {how} «{who}». Бот видит всё, что открыто этой учётной записи.",
+                                          f"Google Drive, {how_en} “{who}”. The bot sees everything open to this account.")}
     seen = 0
     for root in sorted(ROOTS):
         try:
@@ -458,8 +466,10 @@ def check():
         except DriveError:
             continue
     sees = visible(seen, len(ROOTS), one="указанную папку или файл", many="указанные папки и файлы",
-                   many_of="указанных папок и файлов", fix="Доступ боту выдаётся в самом Google Диске.")
-    return {"ok": True, "detail": f"Google Диск, {how} «{who}». {sees}"}
+                   many_of="указанных папок и файлов", fix="Доступ боту выдаётся в самом Google Диске.",
+                   en=dict(one="the listed folder or file", many="listed folders and files",
+                           fix="The bot is given access in Google Drive itself."))
+    return {"ok": True, "detail": say(f"Google Диск, {how} «{who}». {sees}", f"Google Drive, {how_en} “{who}”. {sees}")}
 
 
 @plugin.poll
@@ -482,7 +492,7 @@ def poll(since):
             for c in comments_of(str(m["id"]), a_minute_before(_floor["at"]) if _floor["at"] else ""):
                 events.extend(comment_events(m, c, _floor["at"]))
         except DriveError as exc:
-            plugin.log(f"файл {m.get('id')} не прочитан: {exc}")
+            plugin.log(say(f"файл {m.get('id')} не прочитан: {exc}", f"file {m.get('id')} could not be read: {exc}"))
     return events
 
 
@@ -496,16 +506,17 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     if text and text.strip():
         parts.append(text.strip())
     if link and link.get("url"):
-        parts.append(f"{link.get('title') or 'Открыть в Buff'}: {link['url']}")
+        parts.append(f"{link.get('title') or say('Открыть в Buff', 'Open in Buff')}: {link['url']}")
     if document or attachment:
         # A finished report is a DOCUMENT of its own, in the folder of the one
         # it was asked on — the text itself, not a picture of it; the PDF goes
         # beside it for those who want one.
         doc = document or {}
         folder = folder_of(fid)
-        title = str(doc.get("title") or (attachment or {}).get("filename") or "Исследование")
+        title = str(doc.get("title") or (attachment or {}).get("filename") or say("Исследование", "Research"))
         made = create_doc(folder, title, str(doc.get("markdown") or ""))
-        parts.append(f"Отчёт — в документе «{title}»: {made.get('webViewLink', '')}")
+        parts.append(say(f"Отчёт — в документе «{title}»: {made.get('webViewLink', '')}",
+                         f"The report is in the document “{title}”: {made.get('webViewLink', '')}"))
         if attachment:
             pdf = upload(folder, str(attachment.get("filename") or "report.pdf"), "application/pdf",
                          "application/pdf", base64.b64decode(attachment.get("base64", "")))
@@ -520,12 +531,7 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     return {"ok": True}
 
 
-@plugin.tool(description="Найти документы, таблицы, презентации и папки на Google Диске по словам — в "
-                         "названии И в тексте файлов: Диск ищет по содержимому, интеграция ранжирует найденное, "
-                         "читая текст (слова сравниваются по основе, так что падежи не мешают). Использовать "
-                         "ПЕРВЫМ делом, когда вопрос касается требований, регламентов, планов или того, «как у нас "
-                         "принято»; затем читать найденное get_file.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["query"], "additionalProperties": False})
@@ -552,24 +558,24 @@ def search_files(query: str = "", limit: int = 20):
             try:
                 text = body_of(f)
             except DriveError as exc:
-                plugin.log(f"файл {f.get('id')} не прочитан для поиска: {exc}")
+                plugin.log(say(f"файл {f.get('id')} не прочитан для поиска: {exc}",
+                               f"file {f.get('id')} could not be read for search: {exc}"))
         by_text = match_score(text, words)
         by_name = match_score(str(f.get("name") or ""), words)
         if words and not by_text and not by_name and f["id"] not in {x["id"] for x in found}:
             continue
-        item = {**file_item(f), "matched": "текст" if by_text else "название"}
+        item = {**file_item(f), "matched": say("текст", "text") if by_text else say("название", "name")}
         if by_text:
             item["excerpt"] = excerpt(text, words)
         scored.append((by_text * 2 + by_name, item))
     scored.sort(key=lambda s: -s[0])
     out = [item for _, item in scored]
-    return {"total": len(out), "results": out, "note": "Читайте найденное get_file; папки — list_folder."}
+    return {"total": len(out), "results": out,
+            "note": say("Читайте найденное get_file; папки — list_folder.",
+                        "Read what was found with get_file; folders with list_folder.")}
 
 
-@plugin.tool(description="Прочитать файл Google Диска целиком: документ — как markdown, таблицу — все листы "
-                         "таблицами, презентацию — текстом, папку — списком содержимого; вместе с обсуждением. "
-                         "Использовать, когда поиск нашёл подходящий файл или когда в вопросе назвали его адрес.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_file(key: str = ""):
@@ -580,9 +586,7 @@ def get_file(key: str = ""):
             **file_text(m), "comments": comments_view(fid) if m.get("mimeType") in COMMENTABLE else []}
 
 
-@plugin.tool(description="Перечислить содержимое папки Google Диска: вложенные папки и файлы с их видом. "
-                         "Использовать, когда ответ собирается из нескольких файлов одного раздела.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def list_folder(key: str = ""):
@@ -592,10 +596,7 @@ def list_folder(key: str = ""):
     return {"total": len(kids), "children": kids}
 
 
-@plugin.tool(description="Прочитать один лист или диапазон таблицы Google (например лист «Бюджет» или "
-                         "диапазон A1:D20 на нём). Использовать, когда таблица большая и нужна её часть; "
-                         "без листа и диапазона — вся таблица.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "sheet": {"type": "string"},
                                     "range": {"type": "string"}},
@@ -612,9 +613,7 @@ def get_sheet(key: str = "", sheet: str = "", range: str = ""):  # noqa: A002 �
     return {"key": sid, "markdown": sheet_text(sid, ranges)}
 
 
-@plugin.tool(description="Обсуждения файла Google Диска: ветки комментариев с ответами, кто и когда писал. "
-                         "Использовать, когда важно, что уже обсуждали по этому файлу.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_comments(key: str = ""):
@@ -623,9 +622,7 @@ def get_comments(key: str = ""):
     return {"key": fid, "comments": comments_view(fid)}
 
 
-@plugin.tool(description="Написать комментарий к файлу Google Диска — или ответить в ветке, если ключ вида "
-                         "ФАЙЛ#комментарий.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})
@@ -634,9 +631,7 @@ def add_comment(key: str = "", text: str = ""):
     return {"ok": True}
 
 
-@plugin.tool(description="Создать документ Google из markdown в папке области подключения. Использовать, "
-                         "когда результат нужно оставить на Диске документом, а не комментарием.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"folder": {"type": "string"}, "title": {"type": "string"},
                                     "markdown": {"type": "string"}},

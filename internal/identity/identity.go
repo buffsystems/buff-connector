@@ -75,7 +75,7 @@ func statePath(dir string) string { return filepath.Join(dir, "state.json") }
 // Save writes state to <dir>/state.json with tight permissions (dir 0700, file 0600).
 func Save(dir string, st State) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("mkdir state dir: %w", err)
+		return fmt.Errorf("создание каталога состояния: %w", err)
 	}
 	b, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
@@ -84,7 +84,7 @@ func Save(dir string, st State) error {
 	// Write via a temp file + rename so a crash can't leave a half-written state.
 	tmp := statePath(dir) + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return fmt.Errorf("write state: %w", err)
+		return fmt.Errorf("запись состояния: %w", err)
 	}
 	return os.Rename(tmp, statePath(dir))
 }
@@ -93,11 +93,11 @@ func Save(dir string, st State) error {
 func Load(dir string) (State, error) {
 	b, err := os.ReadFile(statePath(dir))
 	if err != nil {
-		return State{}, fmt.Errorf("read state: %w", err)
+		return State{}, fmt.Errorf("чтение состояния: %w", err)
 	}
 	var st State
 	if err := json.Unmarshal(b, &st); err != nil {
-		return State{}, fmt.Errorf("parse state: %w", err)
+		return State{}, fmt.Errorf("разбор состояния: %w", err)
 	}
 	return st, nil
 }
@@ -106,7 +106,7 @@ func Load(dir string) (State, error) {
 func (st State) Identity() (Identity, error) {
 	seed, err := base64.RawURLEncoding.DecodeString(st.Seed)
 	if err != nil || len(seed) != ed25519.SeedSize {
-		return Identity{}, fmt.Errorf("bad seed in state")
+		return Identity{}, fmt.Errorf("в состоянии испорченный ключ")
 	}
 	return FromSeed(seed), nil
 }

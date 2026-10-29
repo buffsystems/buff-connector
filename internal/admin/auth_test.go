@@ -127,7 +127,8 @@ func TestRootWithoutTokenExplainsInsteadOfServingTheApp(t *testing.T) {
 	}
 	buf := make([]byte, 512)
 	n, _ := res.Body.Read(buf)
-	if !strings.Contains(string(buf[:n]), "connector") {
+	// No language asked for: the default, Russian.
+	if !strings.Contains(string(buf[:n]), "коннектор") {
 		t.Errorf("401 body should tell the operator where the URL comes from, got %q", buf[:n])
 	}
 }

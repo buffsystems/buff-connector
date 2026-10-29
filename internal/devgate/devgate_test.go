@@ -50,6 +50,8 @@ func TestEachRouteRelaysOnlyItsOwnFields(t *testing.T) {
 			"data.cmd.list", map[string]any{"op": "list", "token": "T"}},
 		{"/v1/developer/billing", `{"token":"T","org":"acme","login":"other","op":"billing_topup"}`,
 			"data.cmd.developer_billing", map[string]any{"op": "developer_billing", "token": "T", "org": "acme"}},
+		{"/v1/developer/mobile-home", `{"token":"T","org":"acme","op":"mobile_policy_set","pairing_disabled":false}`,
+			"data.cmd.developer_mobile_home", map[string]any{"op": "developer_mobile_home", "token": "T", "org": "acme"}},
 	}
 	for _, c := range cases {
 		link := &fakeLink{reply: map[string]any{"ok": true, "status": "pending"}}

@@ -31,6 +31,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/oci"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
@@ -48,13 +49,18 @@ type Index struct {
 
 // Entry is one plugin with every version we still serve.
 type Entry struct {
-	Name      string    `json:"name"`
-	Summary   string    `json:"summary"`
-	Category  string    `json:"category"`
-	Publisher string    `json:"publisher"`
-	DocsURL   string    `json:"docs_url,omitempty"`
-	SourceURL string    `json:"source_url,omitempty"`
-	Versions  []Version `json:"versions"`
+	Name     string `json:"name"`
+	Summary  string `json:"summary"`
+	Category string `json:"category"`
+	// The English of Summary and Category (#565), from the bundle's
+	// manifest.en.yaml. An older publisher leaves them out, and a reader
+	// that does not know them — an older connector, the site — never sees them.
+	SummaryEN  string    `json:"summary_en,omitempty"`
+	CategoryEN string    `json:"category_en,omitempty"`
+	Publisher  string    `json:"publisher"`
+	DocsURL    string    `json:"docs_url,omitempty"`
+	SourceURL  string    `json:"source_url,omitempty"`
+	Versions   []Version `json:"versions"`
 }
 
 // Version is one published bundle. It carries what the consent screen needs, so
@@ -101,8 +107,44 @@ type Tool struct {
 	ReadOnly bool   `json:"read_only"`
 	// Answers with a picture: shown in the catalogue so a buyer on a text-only
 	// model knows this one will not be offered to their model.
-	Vision  bool   `json:"vision,omitempty"`
-	Summary string `json:"summary"`
+	Vision    bool   `json:"vision,omitempty"`
+	Summary   string `json:"summary"`
+	SummaryEN string `json:"summary_en,omitempty"`
+}
+
+// InLang is the catalogue as a person reading l sees it: in English, each
+// summary and category its English where the publisher gave one. The index
+// itself is not changed.
+func (idx *Index) InLang(l i18n.Lang) *Index {
+	if idx == nil || l != i18n.EN {
+		return idx
+	}
+	out := *idx
+	out.Plugins = make([]Entry, len(idx.Plugins))
+	for i, e := range idx.Plugins {
+		e.Summary = orElse(e.SummaryEN, e.Summary)
+		e.Category = orElse(e.CategoryEN, e.Category)
+		versions := make([]Version, len(e.Versions))
+		for j, v := range e.Versions {
+			tools := make([]Tool, len(v.Tools))
+			for k, t := range v.Tools {
+				t.Summary = orElse(t.SummaryEN, t.Summary)
+				tools[k] = t
+			}
+			v.Tools = tools
+			versions[j] = v
+		}
+		e.Versions = versions
+		out.Plugins[i] = e
+	}
+	return &out
+}
+
+func orElse(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 // source is where the bytes come from. It knows nothing about signatures: every
@@ -204,11 +246,11 @@ func (d *dirSource) pair(name string) ([]byte, []byte, error) {
 	safe := filepath.Base(path.Clean(name))
 	body, err := os.ReadFile(filepath.Join(d.dir, safe))
 	if err != nil {
-		return nil, nil, fmt.Errorf("offline kit: %w", err)
+		return nil, nil, fmt.Errorf("офлайн-набор: %w", err)
 	}
 	sig, err := os.ReadFile(filepath.Join(d.dir, safe+".sig"))
 	if err != nil {
-		return nil, nil, fmt.Errorf("offline kit: %s is not signed: %w", safe, err)
+		return nil, nil, fmt.Errorf("офлайн-набор — %s не подписан: %w", safe, err)
 	}
 	return body, sig, nil
 }
@@ -247,11 +289,11 @@ func (c *Client) Fetch(ctx context.Context) (*Index, error) {
 		return nil, err
 	}
 	if err := plugin.Verify(body, sig, c.Keys); err != nil {
-		return nil, fmt.Errorf("catalogue signature: %w", err)
+		return nil, fmt.Errorf("подпись каталога: %w", err)
 	}
 	var idx Index
 	if err := json.Unmarshal(body, &idx); err != nil {
-		return nil, fmt.Errorf("catalogue is not readable: %w", err)
+		return nil, fmt.Errorf("каталог не читается: %w", err)
 	}
 	c.cache(body, sig)
 	return &idx, nil
@@ -273,7 +315,7 @@ func (c *Client) Cached() (*Index, error) {
 	}
 	// The cache is on the customer's disk; re-verify rather than trust it.
 	if err := plugin.Verify(body, sig, c.Keys); err != nil {
-		return nil, fmt.Errorf("cached catalogue signature: %w", err)
+		return nil, fmt.Errorf("подпись сохранённого каталога: %w", err)
 	}
 	var idx Index
 	if err := json.Unmarshal(body, &idx); err != nil {
@@ -299,7 +341,7 @@ func (c *Client) Revocations(ctx context.Context) (*plugin.Revocation, error) {
 		return nil, err
 	}
 	if err := plugin.Verify(body, sig, c.Keys); err != nil {
-		return nil, fmt.Errorf("revocation list signature: %w", err)
+		return nil, fmt.Errorf("подпись списка отзыва: %w", err)
 	}
 	var rev plugin.Revocation
 	if err := json.Unmarshal(body, &rev); err != nil {
@@ -315,11 +357,11 @@ func (c *Client) get(ctx context.Context, name string) ([]byte, error) {
 	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("reaching the catalogue: %w", err)
+		return nil, fmt.Errorf("обращение к каталогу: %w", err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("catalogue returned %s for %s", res.Status, name)
+		return nil, fmt.Errorf("каталог ответил %s на %s", res.Status, name)
 	}
 	return io.ReadAll(io.LimitReader(res.Body, plugin.MaxBundleSize+1))
 }

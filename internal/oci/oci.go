@@ -83,10 +83,10 @@ func (c *Client) Pull(ctx context.Context, repo, ref string) (payload, sig []byt
 	}
 	var m manifest
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return nil, nil, fmt.Errorf("%s:%s: manifest is not readable: %w", repo, ref, err)
+		return nil, nil, fmt.Errorf("%s:%s — манифест не читается: %w", repo, ref, err)
 	}
 	if len(m.Layers) < 2 {
-		return nil, nil, fmt.Errorf("%s:%s: expected a payload and a signature, got %d layers", repo, ref, len(m.Layers))
+		return nil, nil, fmt.Errorf("%s:%s — ждали содержимое и подпись, а слоёв %d", repo, ref, len(m.Layers))
 	}
 	if payload, err = c.blob(ctx, repo, m.Layers[0]); err != nil {
 		return nil, nil, err
@@ -131,11 +131,11 @@ func (c *Client) Push(ctx context.Context, repo, ref string, payload, sig []byte
 	req.Header.Set("Content-Type", manifestMediaType)
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("pushing %s:%s: %w", repo, ref, err)
+		return fmt.Errorf("отправка %s:%s: %w", repo, ref, err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode/100 != 2 {
-		return fmt.Errorf("pushing %s:%s: %s: %s", repo, ref, res.Status, snippet(res.Body))
+		return fmt.Errorf("отправка %s:%s — %s (%s)", repo, ref, res.Status, snippet(res.Body))
 	}
 	return nil
 }
@@ -165,7 +165,7 @@ func (c *Client) blob(ctx context.Context, repo string, d descriptor) ([]byte, e
 		return nil, err
 	}
 	if got := digestOf(body); got != d.Digest {
-		return nil, fmt.Errorf("%s: blob digest mismatch: manifest says %s, content is %s", repo, d.Digest, got)
+		return nil, fmt.Errorf("%s — хеш не совпал, в манифесте %s, у содержимого %s", repo, d.Digest, got)
 	}
 	return body, nil
 }
@@ -177,12 +177,12 @@ func (c *Client) putBlob(ctx context.Context, repo string, body []byte) error {
 	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("starting an upload to %s: %w", repo, err)
+		return fmt.Errorf("начало выгрузки в %s: %w", repo, err)
 	}
 	loc := res.Header.Get("Location")
 	res.Body.Close()
 	if res.StatusCode != http.StatusAccepted || loc == "" {
-		return fmt.Errorf("starting an upload to %s: %s", repo, res.Status)
+		return fmt.Errorf("начало выгрузки в %s — %s", repo, res.Status)
 	}
 	put, err := c.request(ctx, http.MethodPut, c.absolute(loc)+separator(loc)+"digest="+url.QueryEscape(digestOf(body)), bytes.NewReader(body))
 	if err != nil {
@@ -191,11 +191,11 @@ func (c *Client) putBlob(ctx context.Context, repo string, body []byte) error {
 	put.Header.Set("Content-Type", "application/octet-stream")
 	up, err := c.HTTP.Do(put)
 	if err != nil {
-		return fmt.Errorf("uploading to %s: %w", repo, err)
+		return fmt.Errorf("выгрузка в %s: %w", repo, err)
 	}
 	defer up.Body.Close()
 	if up.StatusCode/100 != 2 {
-		return fmt.Errorf("uploading to %s: %s: %s", repo, up.Status, snippet(up.Body))
+		return fmt.Errorf("выгрузка в %s — %s (%s)", repo, up.Status, snippet(up.Body))
 	}
 	return nil
 }
@@ -212,14 +212,14 @@ func (c *Client) get(ctx context.Context, url, accept string) ([]byte, error) {
 	}
 	res, err := c.HTTP.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("reaching the registry: %w", err)
+		return nil, fmt.Errorf("обращение к реестру: %w", err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("not published")
+		return nil, fmt.Errorf("не опубликовано")
 	}
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("registry returned %s", res.Status)
+		return nil, fmt.Errorf("реестр ответил %s", res.Status)
 	}
 	return io.ReadAll(io.LimitReader(res.Body, maxBlob))
 }

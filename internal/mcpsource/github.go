@@ -30,7 +30,7 @@ func ParseGitHub(raw string) (Repo, error) {
 	}
 	m := githubRe.FindStringSubmatch(strings.TrimSuffix(raw, "/"))
 	if m == nil {
-		return Repo{}, fmt.Errorf("%q is not a GitHub repository address (https://github.com/<owner>/<repo>)", raw)
+		return Repo{}, fmt.Errorf("%q — не адрес репозитория GitHub (https://github.com/<владелец>/<репозиторий>)", raw)
 	}
 	return Repo{Owner: m[1], Name: m[2], Ref: m[3]}, nil
 }
@@ -59,12 +59,11 @@ func FetchGitHub(ctx context.Context, client *http.Client, api string, r Repo, t
 	}
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("download %s/%s: %w", r.Owner, r.Name, err)
+		return nil, fmt.Errorf("скачивание %s/%s: %w", r.Owner, r.Name, err)
 	}
 	defer res.Body.Close()
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download %s/%s: GitHub answered %d — check the address, the branch, "+
-			"and the token for a private repository", r.Owner, r.Name, res.StatusCode)
+		return nil, fmt.Errorf("скачивание %s/%s — GitHub ответил %d; проверьте адрес, ветку и токен для закрытого репозитория", r.Owner, r.Name, res.StatusCode)
 	}
 	return io.ReadAll(res.Body)
 }

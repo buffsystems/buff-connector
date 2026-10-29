@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 import struct
 
+from buff_plugin import say
 from ole import Compound
 
 
@@ -19,11 +20,12 @@ def text_of(data: bytes) -> str:
     c = Compound(data)
     word = c.stream("WordDocument")
     if word[:2] != b"\xec\xa5":
-        raise ValueError("поток WordDocument не начинается с FIB — файл повреждён")
+        raise ValueError(say("поток WordDocument не начинается с FIB — файл повреждён",
+                             "the WordDocument stream does not start with a FIB — the file is damaged"))
     flags = struct.unpack_from("<H", word, 0x0A)[0]
     table = c.stream("1Table" if flags & 0x0200 else "0Table")
     if flags & 0x0100:
-        raise ValueError("документ зашифрован — прочитать нельзя")
+        raise ValueError(say("документ зашифрован — прочитать нельзя", "the document is encrypted — it cannot be read"))
     ccp_text = struct.unpack_from("<I", word, 0x4C)[0]
     fc_clx, lcb_clx = struct.unpack_from("<II", word, 0x1A2)
     chars = _pieces(word, table[fc_clx:fc_clx + lcb_clx])[:ccp_text]
@@ -37,7 +39,7 @@ def _pieces(word: bytes, clx: bytes) -> str:
     while i < len(clx) and clx[i] == 0x01:
         i += 3 + struct.unpack_from("<H", clx, i + 1)[0]
     if i >= len(clx) or clx[i] != 0x02:
-        raise ValueError("таблица кусков текста не найдена")
+        raise ValueError(say("таблица кусков текста не найдена", "the table of text pieces was not found"))
     lcb = struct.unpack_from("<I", clx, i + 1)[0]
     plc = clx[i + 5:i + 5 + lcb]
     n = (len(plc) - 4) // 12

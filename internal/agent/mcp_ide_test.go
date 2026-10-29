@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // Buff Code gets the same catalogue the platform's runs use (#368): each tool named
@@ -27,14 +28,14 @@ func TestBuffCodeSeesTheToolsAndCallsAsTheDeveloper(t *testing.T) {
 
 	s := NewMCPSurface(m, 0)
 	names := []string{}
-	for _, tool := range s.Catalog() {
+	for _, tool := range s.Catalog(i18n.RU) {
 		names = append(names, tool.Name)
 	}
 	if strings.Join(names, ",") != "weather__lookup,weather__set_home" {
 		t.Fatalf("catalog = %v", names)
 	}
-	if !strings.Contains(s.Instructions(), "Погода для офисов компании.") || !strings.Contains(s.Instructions(), "weather") {
-		t.Fatalf("instructions = %q", s.Instructions())
+	if !strings.Contains(s.Instructions(i18n.RU), "Погода для офисов компании.") || !strings.Contains(s.Instructions(i18n.RU), "weather") {
+		t.Fatalf("instructions = %q", s.Instructions(i18n.RU))
 	}
 
 	out, err := s.Call(context.Background(), "weather__lookup", json.RawMessage(`{}`), "ivan")

@@ -3,9 +3,10 @@ package devgate
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // Buff Code's own session store, row by row (#439). The developer's engine duplicates
@@ -53,7 +54,7 @@ func serveEngineRows(w http.ResponseWriter, r *http.Request, link Requester) boo
 	case reply != nil:
 		writeJSON(w, http.StatusForbidden, reply)
 	default:
-		log.Printf("developer gateway: engine rows: %v", err)
+		i18n.Logf("шлюз разработчиков — строки движка: %v", err)
 		writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "error": "коннектор не достучался до Buff — попробуйте ещё раз"})
 	}
 	return true

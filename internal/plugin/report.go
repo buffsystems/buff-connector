@@ -1,20 +1,27 @@
 package plugin
 
+import "github.com/buffsystems/buff-connector/internal/problem"
+
 // InstanceReport is what an operator, the local UI and the platform report all
 // read. It never carries a secret.
 type InstanceReport struct {
-	ID         string   `json:"id"`
-	Slug       string   `json:"slug"`
-	Alias      string   `json:"alias,omitempty"`
-	Plugin     string   `json:"plugin"`
-	Version    string   `json:"version"`
-	DevProject string   `json:"dev_project,omitempty"`
-	Status     string   `json:"status"`
-	LastError  string   `json:"last_error,omitempty"`
-	Restarts   int      `json:"restarts"`
-	Egress     []string `json:"egress,omitempty"`
-	Tools      []string `json:"tools,omitempty"`
-	ReadOnly   []string `json:"read_only_tools,omitempty"`
+	ID         string `json:"id"`
+	Slug       string `json:"slug"`
+	Alias      string `json:"alias,omitempty"`
+	Plugin     string `json:"plugin"`
+	Version    string `json:"version"`
+	DevProject string `json:"dev_project,omitempty"`
+	Status     string `json:"status"`
+	// LastError is the problem as the connector's own Russian text. Deprecated:
+	// kept for the cabinets that predate Problem, which read it as it is.
+	LastError string `json:"last_error,omitempty"`
+	// Problem is what went wrong as a status — a code, its values, its cause —
+	// for the reader's own client to write in the reader's language (#718).
+	Problem  *problem.Problem `json:"problem,omitempty"`
+	Restarts int              `json:"restarts"`
+	Egress   []string         `json:"egress,omitempty"`
+	Tools    []string         `json:"tools,omitempty"`
+	ReadOnly []string         `json:"read_only_tools,omitempty"`
 	// Tools that answer with a picture. The platform withholds them from a
 	// text-only model, so it has to know which they are without asking the plugin.
 	Vision    []string `json:"vision_tools,omitempty"`

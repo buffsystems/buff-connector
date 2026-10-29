@@ -1,0 +1,48 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Figma — designs as a source of knowledge for answers, and questions right in design
+  comments; sizes, colours and styles for any model, the picture only for a model that
+  can see
+tools:
+  list_files: >-
+    List the connected design files — when the question is about design but no file is
+    named; with no list in the connection, the files where the bot was mentioned
+  get_file: >-
+    Structure of a design file — its pages, frames, sizes, styles and components
+  get_node: >-
+    A node with its parameters — position, auto layout, colours in hex, typography,
+    styles and variables by name
+  get_styles: >-
+    The file’s styles with their values, and variables by mode, if the Figma plan allows
+    reading them
+  search_nodes: >-
+    Find nodes by words in a layer name or text — when the name is known but not the id
+  get_comments: >-
+    Design discussions — comment threads, which node they are pinned to, whether they
+    are resolved
+  render_node: Render a node to PNG — only for a model that reads images
+  add_comment: Write a comment in a design discussion
+config_schema:
+  base_url:
+    title: Figma API address
+    description: Usually no need to change it
+  images_base:
+    title: Image delivery address
+    description: Where Figma serves rendered images from; usually no need to change it
+  files:
+    title: Files
+    description: >-
+      Keys of the design files the bot works with — and only in them does it read and
+      write. The key shows in a file's address: figma.com/design/KEY/…. If both files
+      and projects are empty, the bot works with any file open to the account and
+      answers where it was mentioned (needs the comments webhook)
+  projects:
+    title: Projects
+    description: >-
+      Figma project ids — the bot works with all their files. The number shows in a
+      project's address: figma.com/files/project/NUMBER/…
+  mention_alias:
+    title: Other name the bot answers to
+    description: An extra name besides the account, for example buff

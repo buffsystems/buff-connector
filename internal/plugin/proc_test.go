@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // A plugin runs as its own OS user. That is the whole isolation story: without
@@ -49,13 +51,13 @@ func TestCheckPrivilegeReportsWhatThisProcessCanDo(t *testing.T) {
 	if p.CanSwitchUID != wantRoot {
 		t.Fatalf("CanSwitchUID = %v, euid = %d", p.CanSwitchUID, os.Geteuid())
 	}
-	if !p.CanSwitchUID && p.Reason == "" {
+	if !p.CanSwitchUID && p.Reason == nil {
 		t.Error("a refusal must carry a reason the operator can act on")
 	}
 }
 
 func TestStartRefusesWithoutPrivilegeAndSaysWhy(t *testing.T) {
-	s := &Starter{Priv: Privilege{CanSwitchUID: false, Reason: "connector is not running as root"}}
+	s := &Starter{Priv: Privilege{CanSwitchUID: false, Reason: problem.New("no_isolation_uid", 1000)}}
 
 	_, err := s.Start(context.Background(), Spec{
 		Path: "/bin/sh", Args: []string{"-c", "true"}, UID: 61234, GID: 61234,
@@ -63,7 +65,7 @@ func TestStartRefusesWithoutPrivilegeAndSaysWhy(t *testing.T) {
 	if !errors.Is(err, ErrNoPrivilege) {
 		t.Fatalf("err = %v, want ErrNoPrivilege", err)
 	}
-	if !strings.Contains(err.Error(), "not running as root") {
+	if !strings.Contains(err.Error(), "uid 1000") {
 		t.Errorf("error should carry the diagnosis, got %q", err)
 	}
 }

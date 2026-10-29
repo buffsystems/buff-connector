@@ -88,7 +88,7 @@ func (b *bitbucket) CreatePR(ctx context.Context, token string, spec PRSpec) (PR
 	if isAlreadyExists(resp) {
 		return PRResult{AlreadyExists: true}, nil
 	}
-	return PRResult{}, fmt.Errorf("provider: create PR failed (%d): %s", resp.status, providerMessage(resp.body))
+	return PRResult{}, fmt.Errorf("провайдер — PR не создан (%d): %s", resp.status, providerMessage(resp.body))
 }
 
 func (b *bitbucket) ListRepos(ctx context.Context, token string) ([]RepoRef, error) {

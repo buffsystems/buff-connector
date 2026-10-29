@@ -1,0 +1,54 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Internet access for a model inside your perimeter — search and reading of public pages
+  within your allow and block lists. Keep in mind: the model names the addresses, and
+  they go to the search engine and to the sites; a page it reads enters its context, and
+  a site may contain text aimed at the model; DuckDuckGo works through an unofficial
+  endpoint and may answer with an “are you a robot” check — then switch the engine to
+  SearXNG or Brave. The internal network is always closed.
+tools:
+  web_search: >-
+    Search the internet — when the answer depends on recent or external information that
+    is not in the project or the knowledge base
+  web_fetch: >-
+    Read a page by its address — documentation, an article, an API response — when the
+    address is known or found by search
+config_schema:
+  engine:
+    title: Search engine
+    description: >-
+      duckduckgo — no key and no setup, but through an unofficial address; searxng —
+      your own metasearch inside the perimeter (needs its address, and the json format
+      enabled in its settings.yml); brave — the Brave Search API with a key
+  duckduckgo_base:
+    title: DuckDuckGo address
+    description: Usually no need to change it
+  searxng_base:
+    title: SearXNG address
+    description: Your instance's root, for example https://search.corp.local
+  brave_base:
+    title: Brave Search API address
+    description: Usually no need to change it
+  allow:
+    title: Allow list
+    description: >-
+      When filled in, the model goes ONLY to these sites and the deny list does not
+      apply. A domain without a scheme, subdomains included, the path optional:
+      example.com, docs.example.com, example.com/blog, example.com/*/articles
+  deny:
+    title: Deny list
+    description: >-
+      Sites the model does not go to and whose results it does not see. Applies when the
+      allow list is empty. Written the same way as the allow list
+  content_types:
+    title: Content types
+    description: >-
+      What may be given to the model; empty — anything. For example text/html,
+      application/json, text/* — by the answer's Content-Type header
+  stop_words:
+    title: Stop words
+    description: >-
+      A search query or address with any of these words is refused on the spot, without
+      going outside. Case does not matter

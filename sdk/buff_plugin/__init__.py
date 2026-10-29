@@ -15,7 +15,7 @@ request against the operator's allowlist, and journals it.
 """
 
 from .markup import html_to_text
-from .words import plural, visible
+from .words import english, language, plural, plural_en, say, visible
 from .server import Plugin, HostError, Event
 from .tracker import (
     ACTIONS,
@@ -33,6 +33,7 @@ from .tracker import (
 
 __all__ = [
     "Plugin", "HostError", "Event", "html_to_text", "plural", "visible",
+    "english", "language", "say", "plural_en",
     "ACTIONS", "CONTEXTS", "Command", "Identity", "Scope",
     "after", "at_second", "event_id", "moment", "parse_command", "source",
 ]

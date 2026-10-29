@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // repoLink answers the repository commands like the backend does (#372) and keeps what it was asked.
@@ -121,7 +123,7 @@ func TestReposToolsTakeOpencodesOwnInputPlusBranchAndCursor(t *testing.T) {
 		"grep": "branch,caseSensitive,cursor,include,limit,literal,path,pattern",
 		"read": "branch,cursor,limit,offset,path",
 	}
-	for _, tool := range reposTools {
+	for _, tool := range append(reposTools.in(i18n.RU), reposTools.in(i18n.EN)...) {
 		var schema struct{ Properties map[string]any }
 		_ = json.Unmarshal(tool.InputSchema, &schema)
 		keys := []string{}

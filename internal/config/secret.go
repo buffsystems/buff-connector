@@ -14,7 +14,7 @@ import (
 // references is set.
 func exactlyOneSecretRef(name, env, file string) error {
 	if (env != "") == (file != "") {
-		return fmt.Errorf("exactly one of %s_env or %s_file must be set", name, name)
+		return fmt.Errorf("задайте ровно одно — %s_env или %s_file", name, name)
 	}
 	return nil
 }
@@ -28,17 +28,17 @@ func resolveSecret(name, env, file string) (string, error) {
 	case env != "":
 		v := strings.TrimSpace(os.Getenv(env))
 		if v == "" {
-			return "", fmt.Errorf("%s_env %s is empty or unset", name, env)
+			return "", fmt.Errorf("%s_env %s пуст или не задан", name, env)
 		}
 		return v, nil
 	case file != "":
 		b, err := os.ReadFile(file)
 		if err != nil {
-			return "", fmt.Errorf("read %s_file: %w", name, err)
+			return "", fmt.Errorf("чтение %s_file: %w", name, err)
 		}
 		v := strings.TrimSpace(string(b))
 		if v == "" {
-			return "", fmt.Errorf("%s_file %s is empty", name, file)
+			return "", fmt.Errorf("%s_file %s пуст", name, file)
 		}
 		return v, nil
 	default:

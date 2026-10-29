@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import xml.etree.ElementTree as ET
 
+from buff_plugin import say
 from ooxml import NS, Package, md_table, tag, tidy
 
 _HEADING = re.compile(r"(?:heading|заголовок)\s*(\d)", re.I)
@@ -17,7 +18,8 @@ def text_of(data: bytes) -> str:
     pkg = Package(data)
     body = pkg.xml("word/document.xml").find("w:body", NS)
     if body is None:
-        raise ValueError("в документе нет тела (word/document.xml без w:body)")
+        raise ValueError(say("в документе нет тела (word/document.xml без w:body)",
+                             "the document has no body (word/document.xml without w:body)"))
     links = {rid: t for rid, (k, t) in pkg.rels("word/document.xml").items() if k == "hyperlink"}
     return "\n".join(tidy(_blocks(body, links)) + [""]) + "\n"
 

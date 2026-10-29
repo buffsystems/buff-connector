@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/buffsystems/buff-connector/internal/admin"
 	"github.com/buffsystems/buff-connector/internal/devgate"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
 
@@ -87,27 +89,40 @@ func NewMCPSurface(pm *PluginManager, perMinute int) *MCPSurface {
 }
 
 // Handle is the entry point for a request arriving over the relay.
+//
+// Both methods take the caller's language (`lang`, #565): the run's, when the
+// platform knows it. The tools are described, answered and refused in it; a
+// caller that names none gets the connector's own language, as before.
 func (s *MCPSurface) Handle(ctx context.Context, method string, params json.RawMessage) (any, error) {
+	var named struct {
+		Lang string `json:"lang"`
+	}
+	_ = json.Unmarshal(params, &named)
+	lang := i18n.ForCall(named.Lang)
 	switch method {
 	case "mcp/list":
-		return s.list(), nil
+		return s.list(lang), nil
 	case "mcp/call":
-		return s.call(ctx, params)
+		out, err := s.call(i18n.WithLang(ctx, lang), params)
+		if err != nil {
+			return nil, errors.New(i18n.LocalizeError(lang, err))
+		}
+		return out, nil
 	}
 	return nil, fmt.Errorf("connector does not answer %q", method)
 }
 
-// list describes every instance the pipeline may use. Instances that are not
-// running are listed too, with their status: a stage that finds no tools should
-// be able to say why.
-func (s *MCPSurface) list() map[string]any {
+// list describes every instance the pipeline may use, its tools worded in l.
+// Instances that are not running are listed too, with their status: a stage
+// that finds no tools should be able to say why.
+func (s *MCPSurface) list(l i18n.Lang) map[string]any {
 	reports := s.pm.Reports()
 	out := make([]map[string]any, 0, len(reports))
 	for _, r := range reports {
 		inst := s.pm.Instance(r.Slug)
 		tools := []map[string]any{}
 		if inst != nil {
-			for _, t := range inst.Tools() {
+			for _, t := range inst.ToolsIn(l) {
 				tools = append(tools, map[string]any{
 					"name": t.Name, "description": t.Description,
 					"inputSchema": t.InputSchema, "read_only": t.ReadOnly, "vision": t.Vision,
@@ -139,7 +154,7 @@ type callRequest struct {
 func (s *MCPSurface) call(ctx context.Context, params json.RawMessage) (any, error) {
 	var req callRequest
 	if err := json.Unmarshal(params, &req); err != nil {
-		return nil, fmt.Errorf("bad call: %w", err)
+		return nil, fmt.Errorf("вызов не разобран: %w", err)
 	}
 	return s.invoke(ctx, req, "")
 }
@@ -149,11 +164,11 @@ func (s *MCPSurface) call(ctx context.Context, params json.RawMessage) (any, err
 func (s *MCPSurface) invoke(ctx context.Context, req callRequest, caller string) (json.RawMessage, error) {
 	inst := s.pm.Instance(req.Slug)
 	if inst == nil {
-		return nil, fmt.Errorf("no connection named %q is running here", req.Slug)
+		return nil, fmt.Errorf("подключение %q здесь не запущено", req.Slug)
 	}
 	if !s.gate(req.Slug).allow() {
-		return nil, fmt.Errorf("connection %q is being called more than %d times a minute; "+
-			"slow down rather than dropping calls", req.Slug, s.limit)
+		return nil, fmt.Errorf("подключение %q вызывают чаще %d раз в минуту; "+
+			"сбавь темп, вызовы не отбрасываются", req.Slug, s.limit)
 	}
 	// The caller says it wants only read-only tools; the connector enforces it,
 	// because the decision must not depend on the caller getting it right.
@@ -165,7 +180,7 @@ func (s *MCPSurface) invoke(ctx context.Context, req callRequest, caller string)
 			}
 		}
 		if !ok {
-			return nil, fmt.Errorf("%s is not a read-only tool and this stage may only read", req.Tool)
+			return nil, fmt.Errorf("%s — не инструмент только для чтения, а этой стадии можно только читать", req.Tool)
 		}
 	}
 
@@ -202,15 +217,15 @@ func (s *MCPSurface) DeveloperCalls() []admin.DeveloperCalls {
 const toolSep = "__"
 
 // Catalog is every running connection's tools for Buff Code (#368), named with the
-// connection so two sources never collide.
-func (s *MCPSurface) Catalog() []devgate.Tool {
+// connection so two sources never collide, worded in l.
+func (s *MCPSurface) Catalog(l i18n.Lang) []devgate.Tool {
 	out := []devgate.Tool{}
 	for _, r := range s.pm.Reports() {
 		inst := s.pm.Instance(r.Slug)
 		if inst == nil {
 			continue
 		}
-		for _, t := range inst.Tools() {
+		for _, t := range inst.ToolsIn(l) {
 			schema, _ := json.Marshal(t.InputSchema)
 			out = append(out, devgate.Tool{
 				Name: r.Slug + toolSep + t.Name, Description: t.Description,
@@ -223,9 +238,10 @@ func (s *MCPSurface) Catalog() []devgate.Tool {
 }
 
 // Instructions tells the model what each connection is, with the administrator's notes.
-func (s *MCPSurface) Instructions() string {
+// The opening is prompt text, so it lives in a file per language (texts/instructions.*.md).
+func (s *MCPSurface) Instructions(l i18n.Lang) string {
 	var b strings.Builder
-	b.WriteString("Инструменты пространства компании — через коннектор Buff. Имя инструмента: <подключение>" + toolSep + "<инструмент>.\n")
+	b.WriteString(instructionsIn(l))
 	for _, r := range s.pm.Reports() {
 		fmt.Fprintf(&b, "\n%s — %s", r.Slug, r.Alias)
 		if r.AINotes != "" {

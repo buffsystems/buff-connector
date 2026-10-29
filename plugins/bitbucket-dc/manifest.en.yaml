@@ -1,0 +1,28 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Bitbucket Data Center and Server — questions and answers right in pull requests
+tools:
+  search_pulls: >-
+    Find pull requests by text — when a number is mentioned or context from a review is
+    needed
+  get_pull: >-
+    Read a pull request with its discussion — when the intent of a change or the course
+    of a review is needed
+  get_pull_diff: Read a pull request’s changes as a single diff
+  add_comment: Write a comment in a pull request
+config_schema:
+  base_url:
+    title: Bitbucket address
+    description: >-
+      The server's root together with the context path, for example
+      https://bitbucket.corp.local
+  repos:
+    title: Repositories
+    description: >-
+      In these repositories the bot answers requests — and only in them does it write.
+      The format is PROJECTKEY/repository, for example ACME/api.
+  mention_alias:
+    title: Other name the bot answers to
+    description: An extra name besides the account, for example buff

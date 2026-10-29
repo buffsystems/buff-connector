@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // whoLink answers developer_whoami like the backend does (#368).
@@ -35,20 +37,33 @@ type fakeTools struct {
 	caller string
 	args   string
 	fail   error
+	lang   i18n.Lang
 }
 
-func (f *fakeTools) Catalog() []Tool {
+func (f *fakeTools) Catalog(l i18n.Lang) []Tool {
+	if l == i18n.RU {
+		return []Tool{
+			{Name: "files__read", Description: "Прочитать файл.", InputSchema: json.RawMessage(`{"type":"object"}`), ReadOnly: true},
+			{Name: "jira__create_issue", Description: "Создать задачу.", InputSchema: json.RawMessage(`{"type":"object"}`)},
+		}
+	}
 	return []Tool{
 		{Name: "files__read", Description: "Read a file.", InputSchema: json.RawMessage(`{"type":"object"}`), ReadOnly: true},
 		{Name: "jira__create_issue", Description: "Create an issue.", InputSchema: json.RawMessage(`{"type":"object"}`)},
 	}
 }
 
-func (f *fakeTools) Instructions() string { return "files — файлы отдела" }
+func (f *fakeTools) Instructions(l i18n.Lang) string {
+	if l == i18n.EN {
+		return "files — the department's files"
+	}
+	return "files — файлы отдела"
+}
 
-func (f *fakeTools) Call(_ context.Context, name string, args json.RawMessage, caller string) (json.RawMessage, error) {
+func (f *fakeTools) Call(ctx context.Context, name string, args json.RawMessage, caller string) (json.RawMessage, error) {
 	f.called = append(f.called, name)
 	f.caller, f.args = caller, string(args)
+	f.lang = i18n.FromContext(ctx)
 	if f.fail != nil {
 		return nil, f.fail
 	}

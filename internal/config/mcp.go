@@ -103,28 +103,27 @@ func IsEnvName(s string) bool { return envNameRe.MatchString(s) }
 
 func (m *CustomMCP) validate() error {
 	if !mcpSources[m.Source] {
-		return fmt.Errorf("mcp.source %q is unknown; it is one of archive, github, url, command", m.Source)
+		return fmt.Errorf("mcp.source %q неизвестен — допустимо archive, github, url, command", m.Source)
 	}
 	if m.Command == "" && m.URL == "" {
-		return fmt.Errorf("mcp needs a command to run or a url to reach")
+		return fmt.Errorf("mcp нужна команда для запуска или адрес")
 	}
 	if m.Command != "" && m.URL != "" {
-		return fmt.Errorf("mcp is either a command or a url, not both")
+		return fmt.Errorf("mcp — либо команда, либо адрес, не то и другое")
 	}
 	if m.URL != "" {
 		u, err := url.Parse(m.URL)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return fmt.Errorf("mcp.url %q must be an http(s) address", m.URL)
+			return fmt.Errorf("mcp.url %q должен быть адресом http(s)", m.URL)
 		}
 	}
 	for name := range m.Env {
 		if !envNameRe.MatchString(name) {
-			return fmt.Errorf("mcp.env name %q is not an environment variable name", name)
+			return fmt.Errorf("mcp.env — %q не имя переменной окружения", name)
 		}
 	}
 	if !m.Accepted {
-		return fmt.Errorf("mcp.accepted must be true: this server was not verified by Buff and its " +
-			"network use is not guarded — the operator accepts that explicitly, per server")
+		return fmt.Errorf("mcp.accepted должен быть true — этот сервер Buff не проверял и его выход в сеть не ограничен; администратор принимает это явно, для каждого сервера")
 	}
 	return nil
 }

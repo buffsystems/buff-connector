@@ -13,11 +13,11 @@ import (
 func lockConfig(path string) (func(), error) {
 	f, err := os.OpenFile(lockPath(path), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("open config lock (is the config directory read-only?): %w", err)
+		return nil, fmt.Errorf("открытие блокировки конфига (каталог только для чтения?): %w", err)
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
 		f.Close()
-		return nil, fmt.Errorf("lock config: %w", err)
+		return nil, fmt.Errorf("блокировка конфига: %w", err)
 	}
 	return func() {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)

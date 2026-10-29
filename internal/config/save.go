@@ -22,7 +22,7 @@ import (
 
 // ErrChanged means the file moved under the caller. Re-read and re-apply; do not
 // overwrite, because the other change was somebody's deliberate edit too.
-var ErrChanged = errors.New("config changed on disk since it was read")
+var ErrChanged = errors.New("конфиг на диске изменился после чтения")
 
 // Fingerprint identifies the exact bytes on disk. A missing file fingerprints as
 // the empty string, which is also what a caller passes when it expects to be
@@ -50,10 +50,10 @@ func SaveIf(path string, c *Config, expect string) error {
 
 	current, err := Fingerprint(path)
 	if err != nil {
-		return fmt.Errorf("read current config: %w", err)
+		return fmt.Errorf("чтение текущего конфига: %w", err)
 	}
 	if current != expect {
-		return fmt.Errorf("%w: reload and re-apply your change", ErrChanged)
+		return fmt.Errorf("%w — перечитайте и примените изменение заново", ErrChanged)
 	}
 	return replaceConfigFile(path, c)
 }
@@ -80,19 +80,19 @@ func Save(path string, c *Config) error {
 // goes through here, so this is the one place that has to say no.
 func replaceConfigFile(path string, c *Config) error {
 	if err := validForWrite(c); err != nil {
-		return fmt.Errorf("refusing to write a config the agent would not load: %w", err)
+		return fmt.Errorf("не записываю конфиг, который коннектор не загрузит: %w", err)
 	}
 	b, err := yaml.Marshal(c)
 	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
+		return fmt.Errorf("сборка конфига: %w", err)
 	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return fmt.Errorf("write config (is the config directory read-only?): %w", err)
+		return fmt.Errorf("запись конфига (каталог только для чтения?): %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
-		return fmt.Errorf("replace config: %w", err)
+		return fmt.Errorf("замена конфига: %w", err)
 	}
 	return nil
 }

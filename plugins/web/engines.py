@@ -24,6 +24,8 @@ import json
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urlsplit
 
+from buff_plugin import say
+
 
 class Challenge(RuntimeError):
     """The engine asked a human to prove they are one."""
@@ -78,12 +80,15 @@ class _DuckReader(HTMLParser):
 
 def parse_duckduckgo(status: int, html: str) -> list[dict]:
     if "anomaly" in html and "challenge" in html and "result__a" not in html:
-        raise Challenge(
+        raise Challenge(say(
             "DuckDuckGo попросил подтвердить, что запрос сделан человеком — так бывает с его "
             "неофициальным эндпоинтом под нагрузкой. Переключите движок на SearXNG или Brave "
-            "в настройках подключения.")
+            "в настройках подключения.",
+            "DuckDuckGo asked to confirm the query was made by a human — this happens with its "
+            "unofficial endpoint under load. Switch the engine to SearXNG or Brave in the "
+            "connection's settings."))
     if status >= 400:
-        raise RuntimeError(f"DuckDuckGo ответил {status}")
+        raise RuntimeError(say(f"DuckDuckGo ответил {status}", f"DuckDuckGo answered {status}"))
     reader = _DuckReader()
     reader.feed(html)
     reader.close()
@@ -95,7 +100,8 @@ def parse_duckduckgo(status: int, html: str) -> list[dict]:
 
 def parse_brave(status: int, body: str) -> list[dict]:
     if status >= 400:
-        raise RuntimeError(f"Brave Search ответил {status}: {_reason(body)}")
+        raise RuntimeError(say(f"Brave Search ответил {status}: {_reason(body)}",
+                               f"Brave Search answered {status}: {_reason(body)}"))
     data = json.loads(body) if body.strip() else {}
     out = []
     for r in (data.get("web") or {}).get("results") or []:
@@ -111,8 +117,9 @@ def parse_searxng(status: int, body: str) -> list[dict]:
     if status >= 400:
         hint = ""
         if status == 403:
-            hint = " — скорее всего, в settings.yml экземпляра не включён формат json (search.formats)"
-        raise RuntimeError(f"SearXNG ответил {status}{hint}")
+            hint = say(" — скорее всего, в settings.yml экземпляра не включён формат json (search.formats)",
+                       " — most likely the json format is not enabled in the instance's settings.yml (search.formats)")
+        raise RuntimeError(say(f"SearXNG ответил {status}{hint}", f"SearXNG answered {status}{hint}"))
     data = json.loads(body) if body.strip() else {}
     out = []
     for r in data.get("results") or []:

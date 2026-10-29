@@ -4,11 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/buffsystems/buff-connector/internal/config"
 	"github.com/buffsystems/buff-connector/internal/plugin"
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 func stateWithStore(t *testing.T) (string, *plugin.Store) {
@@ -71,8 +73,13 @@ func TestMissingPluginIsReportedNotIgnored(t *testing.T) {
 	if len(reports) != 1 {
 		t.Fatalf("reports = %+v", reports)
 	}
-	if reports[0].Status != "failed" || !strings.Contains(reports[0].LastError, "not installed") {
+	if reports[0].Status != "failed" || !strings.Contains(reports[0].LastError, "не установлен") {
 		t.Fatalf("report = %+v", reports[0])
+	}
+	// The platform gets it as a status its own clients write the text of (#718).
+	want := &problem.Problem{Code: "plugin_not_installed", Params: map[string]string{"plugin": "demo", "version": "1.0.0"}}
+	if !reflect.DeepEqual(reports[0].Problem, want) {
+		t.Errorf("problem = %+v", reports[0].Problem)
 	}
 	if reports[0].Slug != "jira_prod" {
 		t.Errorf("the operator has to recognise which connection this is: %+v", reports[0])

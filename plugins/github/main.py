@@ -28,6 +28,8 @@ from urllib.parse import quote
 
 from buff_plugin import (
     plural,
+    plural_en,
+    say,
     Event,
     Identity,
     Plugin,
@@ -70,7 +72,8 @@ def api(method: str, path: str, body: dict | None = None, accept: str = ""):
     res = plugin.http(method, BASE + path, credential="api", headers=headers,
                       body=json.dumps(body) if body else "")
     if res["status"] >= 400:
-        raise RuntimeError(f"GitHub ответил {res['status']} на {path}: {res['body'][:300]}")
+        raise RuntimeError(say(f"GitHub ответил {res['status']} на {path}: {res['body'][:300]}",
+                               f"GitHub answered {res['status']} to {path}: {res['body'][:300]}"))
     if accept and "json" not in accept:
         return res["body"]
     return json.loads(res["body"]) if res["body"].strip() else {}
@@ -113,7 +116,8 @@ def split_key(key: str) -> tuple[str, str, str]:
         repo, sep, ident = key.rpartition(mark)
         if sep and repo and ident:
             return repo, kind, ident
-    raise RuntimeError(f"{key} — не адрес обсуждения в GitHub (нужно владелец/репозиторий#номер)")
+    raise RuntimeError(say(f"{key} — не адрес обсуждения в GitHub (нужно владелец/репозиторий#номер)",
+                           f"{key} is not a GitHub discussion address (owner/repository#number is needed)"))
 
 
 def is_pull(comment: dict) -> bool:
@@ -250,7 +254,7 @@ def comment_body(text: str, link: dict | None, attachment_note: str) -> str:
     all, and saying so beats promising a file nobody can open."""
     parts = [text.strip()] if text and text.strip() else []
     if link and link.get("url"):
-        parts.append(f"[{link.get('title') or 'Открыть в Buff'}]({link['url']})")
+        parts.append(f"[{link.get('title') or say('Открыть в Buff', 'Open in Buff')}]({link['url']})")
     if attachment_note:
         parts.append(attachment_note)
     return "\n\n".join(parts)
@@ -270,9 +274,11 @@ def check():
             where = f"Enterprise Server {version}"
     except RuntimeError:
         pass
-    return {"ok": True,
-            "detail": f"GitHub ({where}), вошли как {identity().signed_in()}. "
-                      f"Бот работает в {len(scope.allowed)} {plural(len(scope.allowed), 'репозитории', 'репозиториях', 'репозиториях')}."}
+    n = len(scope.allowed)
+    who = identity().signed_in()
+    return {"ok": True, "detail": say(
+        f"GitHub ({where}), вошли как {who}. Бот работает в {n} {plural(n, 'репозитории', 'репозиториях', 'репозиториях')}.",
+        f"GitHub ({where}), signed in as {who}. The bot works in {n} {plural_en(n, 'repository', 'repositories')}.")}
 
 
 @plugin.poll
@@ -337,7 +343,8 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     repo, kind, ident = split_key(issue)
     # The marked repositories bound writes too, not only reads.
     scope.require(repo)
-    note = ("Документ приложен в обсуждении в Buff — GitHub не принимает файлы через API."
+    note = (say("Документ приложен в обсуждении в Buff — GitHub не принимает файлы через API.",
+                "The document is attached in the discussion in Buff — GitHub does not accept files through its API.")
             if attachment else "")
     body = comment_body(text, link, note)
     if not body:
@@ -349,9 +356,7 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     return {"ok": True}
 
 
-@plugin.tool(description="Найти задачи и pull request в подключённых репозиториях по тексту. "
-                         "Использовать, когда упомянут номер или нужен контекст из трекера клиента.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["query"], "additionalProperties": False})
@@ -367,9 +372,7 @@ def search_issues(query: str = "", limit: int = 20):
     return {"total": len(found), "issues": found}
 
 
-@plugin.tool(description="Прочитать задачу или pull request целиком, вместе с обсуждением. "
-                         "Использовать, когда нужны требования, критерии приёмки или ход обсуждения.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_issue(key: str = ""):
@@ -388,9 +391,7 @@ def get_issue(key: str = ""):
     }
 
 
-@plugin.tool(description="Прочитать изменения pull request одним diff. Использовать, когда вопрос "
-                         "касается того, что именно меняет этот pull request.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_pull_diff(key: str = ""):
@@ -400,8 +401,7 @@ def get_pull_diff(key: str = ""):
     return {"key": key, "diff": diff}
 
 
-@plugin.tool(description="Написать комментарий в задачу или pull request.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

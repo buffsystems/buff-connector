@@ -22,7 +22,7 @@ func newGitHub(kind Kind, base, owner, repo string, client *http.Client) (Provid
 	switch kind {
 	case KindGHE:
 		if base == "" {
-			return nil, fmt.Errorf("provider: ghe requires a base URL")
+			return nil, fmt.Errorf("провайдер — ghe нужен base URL")
 		}
 		g.apiBase = base + "/api/v3"
 		g.gitHost = hostOf(base)
@@ -99,7 +99,7 @@ func (g *gitHub) CreatePR(ctx context.Context, token string, spec PRSpec) (PRRes
 	if isAlreadyExists(resp) {
 		return PRResult{AlreadyExists: true}, nil
 	}
-	return PRResult{}, fmt.Errorf("provider: create PR failed (%d): %s", resp.status, providerMessage(resp.body))
+	return PRResult{}, fmt.Errorf("провайдер — PR не создан (%d): %s", resp.status, providerMessage(resp.body))
 }
 
 func (g *gitHub) ListRepos(ctx context.Context, token string) ([]RepoRef, error) {

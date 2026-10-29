@@ -116,11 +116,12 @@ class TestCalls(unittest.TestCase):
     def test_a_failing_tool_answers_with_an_error_and_keeps_the_channel(self):
         p = build()
         out = drive(p, [
-            {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "nope"}},
+            {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+             "params": {"name": "nope", "_meta": {"buff/lang": "en"}}},
             {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
         ])
         self.assertIn("error", out[0])
-        self.assertIn("no such tool", out[0]["error"]["message"])
+        self.assertIn("no such tool: nope", out[0]["error"]["message"])
         self.assertIn("result", out[1], "the channel must survive a tool error")
 
     def test_poll_returns_events_in_the_shared_shape(self):

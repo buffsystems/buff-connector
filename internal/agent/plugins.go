@@ -12,7 +12,9 @@ import (
 
 	"github.com/buffsystems/buff-connector/internal/catalog"
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // PluginManager turns the plugins: section of the config into running
@@ -136,7 +138,7 @@ func (m *PluginManager) Sync(ctx context.Context, cfg *config.Config) {
 				ID: p.ID, Slug: p.Slug, Alias: p.Alias, Plugin: p.Plugin,
 				Version: p.Version, DevProject: p.DevProject,
 				AINotes: p.AINotes, AINotesUnbounded: p.AINotesUnbounded,
-				Status: "failed", LastError: reason,
+				Status: "failed", LastError: reason.Error(), Problem: problem.From(reason),
 			}
 			if p.IsCustom() {
 				broken.Custom, broken.Source = true, p.MCP.Source
@@ -188,7 +190,7 @@ func (m *PluginManager) start(p *config.PluginInstance, fp string) {
 	}
 	fail := func(err error) {
 		report.Status = "failed"
-		report.LastError = err.Error()
+		report.LastError, report.Problem = err.Error(), problem.From(err)
 		m.mu.Lock()
 		m.failed[p.ID] = report
 		m.mu.Unlock()
@@ -213,7 +215,7 @@ func (m *PluginManager) start(p *config.PluginInstance, fp string) {
 	if reason, blocked := m.store.Blocked(installed.Manifest); blocked {
 		report.Withdrawn = reason
 		if m.store.IsCritical(installed.Manifest) {
-			fail(fmt.Errorf("version withdrawn: %s", reason))
+			fail(problem.New("plugin_withdrawn", reason))
 			return
 		}
 	}
@@ -221,7 +223,7 @@ func (m *PluginManager) start(p *config.PluginInstance, fp string) {
 	// same value the form showed.
 	cfg := installed.Manifest.WithDefaults(p.Config)
 	if err := installed.Manifest.ValidateConfig(cfg); err != nil {
-		fail(fmt.Errorf("settings: %w", err))
+		fail(problem.Wrap("plugin_settings_invalid", err))
 		return
 	}
 	egress, err := installed.Manifest.ResolveEgress(cfg)
@@ -235,11 +237,7 @@ func (m *PluginManager) start(p *config.PluginInstance, fp string) {
 	report.Egress = append(report.Egress, installed.Manifest.ResolveNetwork(cfg)...)
 	runtime := m.interpreter()
 	if runtime == "" {
-		fail(fmt.Errorf("плагину не на чем работать: нужен Python %d.%d или новее, доступный "+
-			"пользователю подключения (интеграция работает под собственным пользователем ОС, "+
-			"поэтому интерпретатор в домашнем каталоге root ей не подходит). Поставьте его "+
-			"пакетным менеджером или разверните среду в %s",
-			minPython[0], minPython[1], m.RuntimeDir()))
+		fail(problem.New("python_missing", fmt.Sprintf("%d.%d", minPython[0], minPython[1]), m.RuntimeDir()))
 		return
 	}
 
@@ -285,6 +283,9 @@ func (m *PluginManager) start(p *config.PluginInstance, fp string) {
 			"BUFF_INSTANCE=" + p.ID,
 			"BUFF_SLUG=" + p.Slug,
 			"BUFF_CONFIG=" + string(cfgJSON),
+			// The connector's own language (#565): a connection check's answer,
+			// and a call that names no language of its own (see plugin.LangMeta).
+			"BUFF_LANG=" + string(i18n.Default()),
 		},
 	}
 
@@ -297,7 +298,7 @@ func (m *PluginManager) start(p *config.PluginInstance, fp string) {
 		// what happened. The exception is having no way to isolate the plugin,
 		// which Start reports and will not retry.
 		report.Status = string(inst.State().Status)
-		report.LastError = err.Error()
+		report.LastError, report.Problem = err.Error(), problem.From(err)
 	} else {
 		report.Status = string(plugin.StatusRunning)
 	}
@@ -342,7 +343,7 @@ func (m *PluginManager) Reports() []plugin.InstanceReport {
 		r.Status = string(st.Status)
 		r.Restarts = st.Restarts
 		if st.LastError != "" {
-			r.LastError = st.LastError
+			r.LastError, r.Problem = st.LastError, st.LastProblem
 		}
 		for _, t := range run.inst.Tools() {
 			r.Tools = append(r.Tools, t.Name)
@@ -454,13 +455,13 @@ func (a *uidAllocator) For(id string) (uint32, error) {
 
 	b, err := json.Marshal(assigned)
 	if err != nil {
-		return 0, err
+		return 0, problem.Wrap("instance_uid_record", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(a.path), 0o711); err != nil {
-		return 0, err
+		return 0, problem.Wrap("instance_uid_record", err)
 	}
 	if err := os.WriteFile(a.path, b, 0o600); err != nil {
-		return 0, fmt.Errorf("record instance uid: %w", err)
+		return 0, problem.Wrap("instance_uid_record", err)
 	}
 	return next, nil
 }
@@ -477,7 +478,7 @@ func (m *PluginManager) Check(ctx context.Context, id string) (map[string]any, e
 		if wasFailed {
 			return nil, fmt.Errorf("%s", failed.LastError)
 		}
-		return nil, fmt.Errorf("instance %s is not running", id)
+		return nil, fmt.Errorf("подключение %s не запущено", id)
 	}
 	// A server the operator brought has no buff/check; what it does have is a
 	// handshake that either happened or did not, and a list of tools.

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
 
@@ -100,7 +101,7 @@ func (s *Server) oauthStart(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := readJSON(r, &req); err != nil || s.oauth == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	spec, file, err := s.oauth.lookup(req.ID, req.Name)
@@ -169,31 +170,33 @@ func (f *oauthFlow) finish(ctx context.Context, p pendingSignIn, code string) (p
 
 func (s *Server) oauthCallback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
+	lang := i18n.ForRequest(r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if s.oauth == nil {
-		http.Error(w, "no plugins", 404)
+		http.Error(w, lang.T("плагинов нет"), 404)
 		return
 	}
 	if e := q.Get("error"); e != "" {
 		w.WriteHeader(400)
-		fmt.Fprint(w, returnPage("Вход не выполнен", "Источник ответил: "+e))
+		fmt.Fprint(w, returnPage(lang, "Вход не выполнен", fmt.Sprintf("Источник ответил: %s", e)))
 		return
 	}
 	p, ok := s.oauth.take(q.Get("state"), "", "")
 	if !ok || q.Get("code") == "" {
 		w.WriteHeader(400)
-		fmt.Fprint(w, returnPage("Вход не выполнен",
+		fmt.Fprint(w, returnPage(lang, "Вход не выполнен",
 			"Этот возврат не относится к входу, начатому на странице коннектора, или вход начат слишком давно. Начните заново."))
 		return
 	}
 	got, err := s.oauth.finish(r.Context(), p, q.Get("code"))
 	if err != nil {
 		w.WriteHeader(400)
-		fmt.Fprint(w, returnPage("Вход не выполнен", err.Error()))
+		fmt.Fprint(w, returnPage(lang, "Вход не выполнен", err.Error()))
 		return
 	}
-	fmt.Fprint(w, returnPage("Вход выполнен", "Подключение работает от имени "+orUnknown(got.Account)+
-		". Вернитесь на страницу коннектора — эту вкладку можно закрыть."))
+	fmt.Fprint(w, returnPage(lang, "Вход выполнен", fmt.Sprintf(
+		"Подключение работает от имени %s. Вернитесь на страницу коннектора — эту вкладку можно закрыть.",
+		orUnknown(got.Account))))
 }
 
 func (s *Server) oauthFinish(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +206,7 @@ func (s *Server) oauthFinish(w http.ResponseWriter, r *http.Request) {
 		Pasted string `json:"pasted"`
 	}
 	if err := readJSON(r, &req); err != nil || s.oauth == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	code, state := plugin.CodeFromReturn(req.Pasted)
@@ -234,8 +237,9 @@ func orUnknown(s string) string {
 // returnPage is the whole page the browser lands on after consent: one
 // sentence, no script, nothing to load. The page it belongs to is the one
 // already open in another tab.
-func returnPage(title, text string) string {
-	return `<!doctype html><meta charset="utf-8"><title>` + html.EscapeString(title) + `</title>` +
+func returnPage(lang i18n.Lang, title, text string) string {
+	title, text = lang.T(title), i18n.Localize(lang, text)
+	return `<!doctype html><html lang="` + string(lang) + `"><meta charset="utf-8"><title>` + html.EscapeString(title) + `</title>` +
 		`<body style="font:16px system-ui;margin:3rem auto;max-width:36rem;padding:0 1rem;color:#1a1a1a">` +
 		`<h1 style="font-size:1.3rem">` + html.EscapeString(title) + `</h1><p>` + html.EscapeString(text) + `</p></body>`
 }

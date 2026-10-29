@@ -1,0 +1,45 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Google Drive — documents, spreadsheets and presentations as context for answers;
+  questions in document comments, a research report as a new document in a folder
+tools:
+  search_files: >-
+    Find documents, spreadsheets, presentations and folders by words in the title and
+    text — when the answer may already be written down on Drive
+  get_file: >-
+    Read a whole document (markdown), a spreadsheet (all sheets), a presentation (text)
+    or a folder (contents) — together with its discussion
+  list_folder: >-
+    List a folder’s contents — when the answer comes together from several files of one
+    section
+  get_sheet: >-
+    Read one sheet or range of a spreadsheet — when a specific part of a large
+    spreadsheet is needed
+  get_comments: File discussions — comment threads with replies, who wrote and when
+  add_comment: Write a comment on a file or reply in a discussion thread
+  create_document: Create a Google document from markdown in one of the connected folders
+config_schema:
+  drive_api:
+    title: Drive API address
+    description: Usually no need to change it
+  sheets_api:
+    title: Sheets API address
+    description: Usually no need to change it
+  auth_uri:
+    title: Google sign-in address (OAuth)
+    description: Usually no need to change it
+  token_uri:
+    title: Google token address
+    description: Usually no need to change it
+  roots:
+    title: Folders and files
+    description: >-
+      Links or ids of folders and files — the bot works in them and in everything
+      inside. Empty — everything open to the account on Drive.
+  mention_alias:
+    title: Other name the bot answers to
+    description: >-
+      A short name besides the account's name, for example buff. In a comment on a
+      document the bot is addressed by a word in the text or by mentioning its address

@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // An Instance is one configured connection to one customer system: a plugin
@@ -54,8 +57,10 @@ type State struct {
 	Restarts  int           `json:"restarts"`
 	Backoff   time.Duration `json:"backoff_ms"`
 	LastError string        `json:"last_error,omitempty"`
-	Since     time.Time     `json:"since"`
-	Tools     int           `json:"tools"`
+	// LastProblem is LastError as a status, for the report to the platform.
+	LastProblem *problem.Problem `json:"-"`
+	Since       time.Time        `json:"since"`
+	Tools       int              `json:"tools"`
 }
 
 // InstanceConfig is the fixed description of an instance; nothing here changes
@@ -98,11 +103,14 @@ type Instance struct {
 	starter *Starter
 	handler Handler
 
-	mu      sync.RWMutex
-	state   State
-	conn    channel
-	proc    *Process
-	tools   []Tool
+	mu    sync.RWMutex
+	state State
+	conn  channel
+	proc  *Process
+	tools []Tool
+	// texts: each tool's description and schema as the plugin words them in each
+	// language (see listTexts); empty for a server the operator brought.
+	texts   map[i18n.Lang]map[string]Tool
 	marks   map[string]bool
 	info    ServerInfo
 	logs    LogRing
@@ -158,12 +166,19 @@ func (i *Instance) State() State {
 
 // Tools is what the plugin declared at the last successful handshake, with
 // ReadOnly decided: by the hint for a catalogue plugin, by the operator's marks
-// for a server they brought.
-func (i *Instance) Tools() []Tool {
+// for a server they brought — worded in the connector's own language.
+func (i *Instance) Tools() []Tool { return i.ToolsIn(i18n.Default()) }
+
+// ToolsIn is Tools as a model working in l is told about them: each tool's
+// description and input schema in l, where the plugin words them in l.
+func (i *Instance) ToolsIn(l i18n.Lang) []Tool {
 	i.mu.RLock()
 	defer i.mu.RUnlock()
 	out := append([]Tool(nil), i.tools...)
 	for n := range out {
+		if t, ok := i.texts[l][out[n].Name]; ok {
+			out[n].Description, out[n].InputSchema = t.Description, t.InputSchema
+		}
 		if i.cfg.PlainMCP {
 			out[n].ReadOnly = i.marks[out[n].Name]
 		} else {
@@ -281,39 +296,45 @@ func (i *Instance) attempt(ctx context.Context) error {
 		// "the plugin closed the channel" tells an operator nothing; what it
 		// printed on the way out tells them everything.
 		if tail := i.logs.Last(); tail != "" {
-			return fmt.Errorf("initialize: %w (plugin said: %s)", err, tail)
+			return problem.Wrap("handshake_failed_said", err, tail)
 		}
-		return fmt.Errorf("initialize: %w", err)
+		return problem.Wrap("handshake_failed", err)
 	}
 	if init.HostAPI > SupportedHostAPI {
 		abandon()
-		return fmt.Errorf("plugin needs host API %d, this connector speaks %d — update the connector",
-			init.HostAPI, SupportedHostAPI)
+		return problem.New("host_api_newer", init.HostAPI, SupportedHostAPI)
 	}
 	if i.cfg.PlainMCP {
 		// The published protocol: nothing may be asked until the client has
 		// said the handshake is over.
 		if err := conn.Notify("notifications/initialized", map[string]any{}); err != nil {
 			abandon()
-			return fmt.Errorf("initialized: %w", err)
+			return problem.Wrap("handshake_end_failed", err)
 		}
 	}
 
-	tools, err := listTools(hctx, conn)
+	tools, err := listTools(hctx, conn, "")
 	if err != nil {
 		abandon()
 		return err
 	}
+	var texts map[i18n.Lang]map[string]Tool
+	if !i.cfg.PlainMCP {
+		if texts, err = listTexts(hctx, conn); err != nil {
+			abandon()
+			return err
+		}
+	}
 
 	i.mu.Lock()
-	i.conn, i.proc, i.tools = conn, proc, tools
+	i.conn, i.proc, i.tools, i.texts = conn, proc, tools, texts
 	i.info = init.ServerInfo
 	i.info.HostAPI = init.HostAPI
 	_, i.info.Polls = init.Capabilities["buff/poll"]
 	_, i.info.Replies = init.Capabilities["buff/reply"]
 	_, i.info.Checks = init.Capabilities["buff/check"]
 	i.state.Status = StatusRunning
-	i.state.LastError = ""
+	i.state.LastError, i.state.LastProblem = "", nil
 	i.state.Since = time.Now()
 	i.mu.Unlock()
 	return nil
@@ -360,9 +381,9 @@ func (i *Instance) initializeParams() map[string]any {
 // is a hint of "writing", because guessing the other way hands a reading stage
 // a destructive tool. visionHint is ours: unmarked means "answers in text",
 // which every model reads.
-func listTools(ctx context.Context, conn channel) ([]Tool, error) {
+func listTools(ctx context.Context, conn channel, lang i18n.Lang) ([]Tool, error) {
 	var out []Tool
-	params := map[string]any{}
+	params := withLang(map[string]any{}, lang)
 	seen := map[string]bool{}
 	for {
 		var res struct {
@@ -376,7 +397,7 @@ func listTools(ctx context.Context, conn channel) ([]Tool, error) {
 			NextCursor string `json:"nextCursor"`
 		}
 		if err := conn.Call(ctx, "tools/list", params, &res); err != nil {
-			return nil, fmt.Errorf("tools/list: %w", err)
+			return nil, problem.Wrap("tools_list_failed", err)
 		}
 		for _, t := range res.Tools {
 			tool := t.Tool
@@ -388,11 +409,42 @@ func listTools(ctx context.Context, conn channel) ([]Tool, error) {
 			return out, nil
 		}
 		if seen[res.NextCursor] {
-			return nil, fmt.Errorf("tools/list: the server repeats cursor %q — a list that never ends", res.NextCursor)
+			return nil, problem.New("tools_cursor_loop", res.NextCursor)
 		}
 		seen[res.NextCursor] = true
-		params = map[string]any{"cursor": res.NextCursor}
+		params = withLang(map[string]any{"cursor": res.NextCursor}, lang)
 	}
+}
+
+// LangMeta is the key under a request's _meta (MCP's place for what the protocol
+// does not define) that names the language of a listing or a call (#565). Our SDK
+// answers in it; a plugin built before ignores it and answers as it always did.
+const LangMeta = "buff/lang"
+
+func withLang(params map[string]any, lang i18n.Lang) map[string]any {
+	if lang != "" {
+		params["_meta"] = map[string]any{LangMeta: string(lang)}
+	}
+	return params
+}
+
+// listTexts asks a plugin of ours for its catalogue in each language: what the model
+// is told about a tool — its description and its parameters' — is the plugin's to
+// word, in the language of whoever calls it. Only the words are taken from these
+// listings; what a tool IS (its name, its marks) comes from the plain one.
+func listTexts(ctx context.Context, conn channel) (map[i18n.Lang]map[string]Tool, error) {
+	out := map[i18n.Lang]map[string]Tool{}
+	for _, l := range []i18n.Lang{i18n.RU, i18n.EN} {
+		tools, err := listTools(ctx, conn, l)
+		if err != nil {
+			return nil, err
+		}
+		out[l] = make(map[string]Tool, len(tools))
+		for _, t := range tools {
+			out[l][t.Name] = t
+		}
+	}
+	return out, nil
 }
 
 // CallTool invokes one of the plugin's tools.
@@ -405,7 +457,13 @@ func (i *Instance) CallTool(ctx context.Context, name string, args, out any) err
 	}
 	ctx, cancel := context.WithTimeout(ctx, i.cfg.CallTimeout)
 	defer cancel()
-	return conn.Call(ctx, "tools/call", map[string]any{"name": name, "arguments": args}, out)
+	params := map[string]any{"name": name, "arguments": args}
+	// Our plugin answers — and fails — in the call's language; a server the operator
+	// brought is sent exactly what MCP defines.
+	if l, ok := i18n.Named(ctx); ok && !i.cfg.PlainMCP {
+		params = withLang(params, l)
+	}
+	return conn.Call(ctx, "tools/call", params, out)
 }
 
 // Call sends any method to the plugin — used for the buff/* surface.
@@ -446,6 +504,6 @@ func (i *Instance) setState(s Status, err error) {
 	defer i.mu.Unlock()
 	i.state.Status = s
 	if err != nil {
-		i.state.LastError = err.Error()
+		i.state.LastError, i.state.LastProblem = err.Error(), problem.From(err)
 	}
 }

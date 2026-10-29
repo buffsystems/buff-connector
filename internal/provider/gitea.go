@@ -17,7 +17,7 @@ type gitea struct {
 
 func newGitea(base, owner, repo string, client *http.Client) (Provider, error) {
 	if base == "" {
-		return nil, fmt.Errorf("provider: gitea requires a base URL")
+		return nil, fmt.Errorf("провайдер — gitea нужен base URL")
 	}
 	return &gitea{client: client, base: base, owner: owner, repo: repo}, nil
 }
@@ -80,7 +80,7 @@ func (g *gitea) CreatePR(ctx context.Context, token string, spec PRSpec) (PRResu
 	if isAlreadyExists(resp) {
 		return PRResult{AlreadyExists: true}, nil
 	}
-	return PRResult{}, fmt.Errorf("provider: create PR failed (%d): %s", resp.status, providerMessage(resp.body))
+	return PRResult{}, fmt.Errorf("провайдер — PR не создан (%d): %s", resp.status, providerMessage(resp.body))
 }
 
 func (g *gitea) ListRepos(ctx context.Context, token string) ([]RepoRef, error) {

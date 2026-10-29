@@ -13,6 +13,8 @@ import re
 import zipfile
 import xml.etree.ElementTree as ET
 
+from buff_plugin import say
+
 NS = {
     "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
@@ -30,7 +32,8 @@ class Package:
         try:
             self.zip = zipfile.ZipFile(io.BytesIO(data))
         except zipfile.BadZipFile as exc:
-            raise ValueError("файл не является архивом Office (zip повреждён или это другой формат)") from exc
+            raise ValueError(say("файл не является архивом Office (zip повреждён или это другой формат)",
+                                 "the file is not an Office archive (the zip is damaged or it is another format)")) from exc
 
     def has(self, name: str) -> bool:
         return name in self.zip.namelist()
@@ -39,9 +42,9 @@ class Package:
         try:
             return ET.fromstring(self.zip.read(name))
         except KeyError as exc:
-            raise ValueError(f"в архиве нет части {name}") from exc
+            raise ValueError(say(f"в архиве нет части {name}", f"the archive has no part {name}")) from exc
         except ET.ParseError as exc:
-            raise ValueError(f"часть {name} не разбирается как XML: {exc}") from exc
+            raise ValueError(say(f"часть {name} не разбирается как XML: {exc}", f"part {name} does not parse as XML: {exc}")) from exc
 
     def rels(self, part: str) -> dict[str, tuple[str, str]]:
         """rId → (type suffix, target resolved against the part's folder)."""

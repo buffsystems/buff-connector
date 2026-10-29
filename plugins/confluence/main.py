@@ -43,6 +43,7 @@ from buff_plugin import (
     Identity,
     Plugin,
     Scope,
+    say,
     visible,
     after,
     event_id,
@@ -86,7 +87,8 @@ def api(method: str, path: str, body: dict | None = None):
                       headers={"Content-Type": "application/json"} if body else {},
                       body=json.dumps(body) if body else "")
     if res["status"] >= 400:
-        raise RuntimeError(f"Confluence ответил {res['status']} на {path}: {res['body'][:300]}")
+        raise RuntimeError(say(f"Confluence ответил {res['status']} на {path}: {res['body'][:300]}",
+                               f"Confluence answered {res['status']} to {path}: {res['body'][:300]}"))
     return json.loads(res["body"]) if res["body"].strip() else {}
 
 
@@ -114,7 +116,8 @@ def page_key(space: str, page_id) -> str:
 def split_key(key: str) -> tuple[str, str]:
     space, sep, page = str(key).rpartition("#")
     if not sep or not space or not page:
-        raise RuntimeError(f"{key} — не адрес страницы Confluence (нужно ПРОСТРАНСТВО#номер)")
+        raise RuntimeError(say(f"{key} — не адрес страницы Confluence (нужно ПРОСТРАНСТВО#номер)",
+                               f"{key} is not a Confluence page address (SPACE#number is needed)"))
     return space, page
 
 
@@ -215,7 +218,7 @@ def as_storage(text: str) -> str:
 def comment_body(text: str, link: dict | None, attachment_note: str) -> str:
     parts = [text.strip()] if text and text.strip() else []
     if link and link.get("url"):
-        parts.append(f"{link.get('title') or 'Открыть в Buff'}: {link['url']}")
+        parts.append(f"{link.get('title') or say('Открыть в Buff', 'Open in Buff')}: {link['url']}")
     if attachment_note:
         parts.append(attachment_note)
     return "\n\n".join(parts)
@@ -240,7 +243,8 @@ def upload(page_id: str, attachment: dict) -> None:
                                "Content-Type": f"multipart/form-data; boundary={boundary}"},
                       body=body.decode("latin-1"))
     if res["status"] >= 400:
-        raise RuntimeError(f"вложение не принято: {res['status']} {res['body'][:200]}")
+        raise RuntimeError(say(f"вложение не принято: {res['status']} {res['body'][:200]}",
+                               f"the attachment was not accepted: {res['status']} {res['body'][:200]}"))
 
 
 # ---- plugin surface ----------------------------------------------------
@@ -287,9 +291,13 @@ def check():
         except RuntimeError:
             pass
     area = (visible(seen, len(scope.allowed), one="указанное пространство", many="указанные пространства",
-                    many_of="указанных пространств", fix="Права боту выдаются в самом Confluence.")
-            if scope.allowed else "Бот видит все пространства, открытые учётной записи.")
-    return {"ok": True, "detail": f"{where}, вошли как {identity().signed_in()}. {area}"}
+                    many_of="указанных пространств", fix="Права боту выдаются в самом Confluence.",
+                    en=dict(one="the listed space", many="listed spaces",
+                            fix="The bot is given access in Confluence itself."))
+            if scope.allowed else say("Бот видит все пространства, открытые учётной записи.",
+                                      "The bot sees every space open to the account."))
+    who = identity().signed_in()
+    return {"ok": True, "detail": say(f"{where}, вошли как {who}. {area}", f"{where}, signed in as {who}. {area}")}
 
 
 @plugin.poll
@@ -314,7 +322,8 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     note = ""
     if attachment:
         upload(page_id, attachment)
-        note = f"Документ приложен к странице: {attachment.get('filename', 'report.pdf')}"
+        note = say(f"Документ приложен к странице: {attachment.get('filename', 'report.pdf')}",
+                   f"The document is attached to the page: {attachment.get('filename', 'report.pdf')}")
     body = comment_body(text, link, note)
     if not body:
         return {"ok": True}
@@ -326,10 +335,7 @@ def reply(issue: str = "", text: str = "", link: dict | None = None,
     return {"ok": True}
 
 
-@plugin.tool(description="Найти страницы в подключённых пространствах по тексту. Использовать "
-                         "ПЕРВЫМ делом, когда вопрос касается требований, регламентов, "
-                         "архитектурных решений или того, «как у нас принято».",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object",
                      "properties": {"query": {"type": "string"}, "limit": {"type": "integer"}},
                      "required": ["query"], "additionalProperties": False})
@@ -361,9 +367,7 @@ def _space_of(result: dict) -> str:
     return found.group(1) if found else ""
 
 
-@plugin.tool(description="Прочитать страницу целиком, вместе с обсуждением. Использовать, когда "
-                         "поиск нашёл подходящую страницу или когда в вопросе назвали её адрес.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_page(key: str = ""):
@@ -387,9 +391,7 @@ def get_page(key: str = ""):
     }
 
 
-@plugin.tool(description="Перечислить дочерние страницы раздела. Использовать, когда ответ "
-                         "собирается из нескольких страниц одного раздела.",
-             read_only=True,
+@plugin.tool(read_only=True,
              schema={"type": "object", "properties": {"key": {"type": "string"}},
                      "required": ["key"], "additionalProperties": False})
 def get_page_children(key: str = ""):
@@ -403,8 +405,7 @@ def get_page_children(key: str = ""):
                       for p in found]}
 
 
-@plugin.tool(description="Написать комментарий на странице.",
-             read_only=False,
+@plugin.tool(read_only=False,
              schema={"type": "object",
                      "properties": {"key": {"type": "string"}, "text": {"type": "string"}},
                      "required": ["key", "text"], "additionalProperties": False})

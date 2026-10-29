@@ -11,9 +11,10 @@ package devgate
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net/http"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // Requester sends one command to the backend over the middleware (natslink.Link does).
@@ -36,6 +37,9 @@ var routes = map[string]route{
 	// The organisation's balance and the developer's own spend, for Buff Code to show
 	// (cloud-front#455): a read; whose spend it is the backend takes from the token.
 	"/v1/developer/billing": {op: "developer_billing", fields: []string{"token", "org"}},
+	// Buff Code's home on the mobile relay (cloud-front#639): the peer it names there and
+	// whether the organisation forbids phones — the gateway applies that policy to it.
+	"/v1/developer/mobile-home": {op: "developer_mobile_home", fields: []string{"token", "org"}},
 }
 
 // commandTimeout: how long one relayed command waits for the backend's answer.
@@ -75,6 +79,9 @@ func HandlerWithTools(link Requester, tools Tools, org string) http.Handler {
 		if serveModels(w, r, link) {
 			return
 		}
+		if serveDraw(w, r, link) {
+			return
+		}
 		if serveEngineRows(w, r, link) {
 			return
 		}
@@ -107,13 +114,20 @@ func HandlerWithTools(link Requester, tools Tools, org string) http.Handler {
 		case reply != nil: // the backend answered: a refusal, passed on in its own words
 			writeJSON(w, http.StatusForbidden, reply)
 		default:
-			log.Printf("developer gateway: %s: %v", rt.op, err)
+			i18n.Logf("шлюз разработчиков — %s: %v", rt.op, err)
 			writeJSON(w, http.StatusBadGateway, map[string]any{"ok": false, "error": "коннектор не достучался до Buff — попробуйте ещё раз"})
 		}
 	})
 }
 
+// writeJSON answers Buff Code. An error a developer reads is in the connector's
+// language: Buff Code's requests do not say theirs.
 func writeJSON(w http.ResponseWriter, status int, v any) {
+	if m, ok := v.(map[string]any); ok {
+		if msg, ok := m["error"].(string); ok {
+			m["error"] = i18n.Localize(i18n.Default(), msg)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
@@ -138,14 +152,14 @@ func Serve(ctx context.Context, s Settings, link Requester, tools Tools) *http.S
 	go func() {
 		var err error
 		if tls {
-			log.Printf("developer gateway: listening on %s (https)", s.Listen)
+			i18n.Logf("шлюз разработчиков — слушаю %s (https)", s.Listen)
 			err = srv.ListenAndServeTLS(s.TLSCert, s.TLSKey)
 		} else {
-			log.Printf("developer gateway: listening on %s WITHOUT TLS — developers' tokens cross the network in the clear; set developer_gateway.tls_cert and tls_key", s.Listen)
+			i18n.Logf("шлюз разработчиков — слушаю %s БЕЗ TLS, токены разработчиков идут по сети открытым текстом; задайте developer_gateway.tls_cert и tls_key", s.Listen)
 			err = srv.ListenAndServe()
 		}
 		if err != nil && err != http.ErrServerClosed {
-			log.Printf("developer gateway on %s: %v", s.Listen, err)
+			i18n.Logf("шлюз разработчиков на %s — %v", s.Listen, err)
 		}
 	}()
 	go func() {

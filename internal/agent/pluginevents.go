@@ -3,13 +3,13 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/natslink"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
@@ -92,19 +92,19 @@ func (e PluginEvent) extraString(k string) string {
 func (e PluginEvent) validate() error {
 	switch {
 	case e.ID == "":
-		return fmt.Errorf("event has no id")
+		return fmt.Errorf("у события нет id")
 	case e.At == "":
-		return fmt.Errorf("event %s has no timestamp", e.ID)
+		return fmt.Errorf("у события %s нет времени", e.ID)
 	case e.issue() == "":
-		return fmt.Errorf("event %s names no ticket (extra.issue)", e.ID)
+		return fmt.Errorf("событие %s не называет задачу (extra.issue)", e.ID)
 	case !pluginActions[e.Action]:
-		return fmt.Errorf("event %s asks for %q, which is not an action we run", e.ID, e.Action)
+		return fmt.Errorf("событие %s просит %q, а такого действия нет", e.ID, e.Action)
 	case strings.TrimSpace(e.Body) == "":
-		return fmt.Errorf("event %s carries no instruction", e.ID)
+		return fmt.Errorf("в событии %s нет поручения", e.ID)
 	case !eventContexts[e.context()]:
-		return fmt.Errorf("event %s comes from %q, which is not a place we read", e.ID, e.context())
+		return fmt.Errorf("событие %s пришло из %q, а это место не читается", e.ID, e.context())
 	case e.ref() != "" && e.repo() == "":
-		return fmt.Errorf("event %s names a branch but no repository", e.ID)
+		return fmt.Errorf("событие %s называет ветку, но не репозиторий", e.ID)
 	}
 	return nil
 }
@@ -165,7 +165,7 @@ func pollPluginEvents(ctx context.Context, link *natslink.Link, m *PluginManager
 		err := inst.Call(pctx, "buff/poll", map[string]any{"since": since}, &out)
 		cancel()
 		if err != nil {
-			log.Printf("plugin %s: poll failed: %v", p.Slug, err)
+			i18n.Logf("плагин %s — опрос не удался: %v", p.Slug, err)
 			continue
 		}
 
@@ -174,7 +174,7 @@ func pollPluginEvents(ctx context.Context, link *natslink.Link, m *PluginManager
 			if err := e.validate(); err != nil {
 				// Not delivered, and deliberately not retried: a malformed event
 				// will be malformed again. Say so once and move on.
-				log.Printf("plugin %s: %v (skipped)", p.Slug, err)
+				i18n.Logf("плагин %s — %v (пропущено)", p.Slug, err)
 				delivered[e.ID] = true
 				continue
 			}
@@ -182,13 +182,13 @@ func pollPluginEvents(ctx context.Context, link *natslink.Link, m *PluginManager
 			_, err := link.Request(rctx, "data.cmd.connector_event", buildPluginEventPayload(access, p, e, version))
 			cancel()
 			if err != nil {
-				log.Printf("plugin %s: report %s: %v", p.Slug, e.ID, err)
+				i18n.Logf("плагин %s — отчёт %s: %v", p.Slug, e.ID, err)
 				continue
 			}
 			delivered[e.ID] = true
 		}
 		if n := len(delivered); n > 0 {
-			log.Printf("plugin %s: %d request(s) forwarded", p.Slug, n)
+			i18n.Logf("плагин %s — передано запросов: %d", p.Slug, n)
 		}
 		saveInstanceWatermark(stateDir, p.ID, highWatermark(since, out.Events, delivered))
 	}
@@ -275,16 +275,16 @@ func saveInstanceWatermark(stateDir, id, at string) {
 	// 0711 on instances/ is what makes an instance's directory traversable but
 	// not listable; the per-instance directory itself stays private.
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		log.Printf("plugin %s: persist watermark: %v", id, err)
+		i18n.Logf("плагин %s — сохранение отметки чтения: %v", id, err)
 		return
 	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, []byte(at), 0o600); err != nil {
-		log.Printf("plugin %s: persist watermark: %v", id, err)
+		i18n.Logf("плагин %s — сохранение отметки чтения: %v", id, err)
 		return
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		log.Printf("plugin %s: persist watermark: %v", id, err)
+		i18n.Logf("плагин %s — сохранение отметки чтения: %v", id, err)
 	}
 }
 
@@ -307,7 +307,7 @@ func deliverCallback(ctx context.Context, link *natslink.Link, m *PluginManager,
 	}
 	inst := m.Instance(p.Slug)
 	if inst == nil {
-		log.Printf("plugin %s: callback arrived while the connection is down", p.Slug)
+		i18n.Logf("плагин %s — вебхук пришёл, когда подключение не работает", p.Slug)
 		return
 	}
 	pctx, cancel := context.WithTimeout(ctx, reqTimeout)
@@ -320,26 +320,26 @@ func deliverCallback(ctx context.Context, link *natslink.Link, m *PluginManager,
 		"body":    string(c.body),
 	}, &out)
 	if err != nil {
-		log.Printf("plugin %s: callback refused: %v", p.Slug, err)
+		i18n.Logf("плагин %s — вебхук отклонён: %v", p.Slug, err)
 		return
 	}
 	delivered := 0
 	for _, e := range out.Events {
 		if verr := e.validate(); verr != nil {
-			log.Printf("plugin %s: %v (skipped)", p.Slug, verr)
+			i18n.Logf("плагин %s — %v (пропущено)", p.Slug, verr)
 			continue
 		}
 		rctx, rcancel := context.WithTimeout(ctx, reqTimeout)
 		_, rerr := link.Request(rctx, "data.cmd.connector_event", buildPluginEventPayload(access, *p, e, version))
 		rcancel()
 		if rerr != nil {
-			log.Printf("plugin %s: report %s: %v", p.Slug, e.ID, rerr)
+			i18n.Logf("плагин %s — отчёт %s: %v", p.Slug, e.ID, rerr)
 			continue
 		}
 		delivered++
 	}
 	if delivered > 0 {
-		log.Printf("plugin %s: %d request(s) from a callback", p.Slug, delivered)
+		i18n.Logf("плагин %s — запросов из вебхука: %d", p.Slug, delivered)
 	}
 }
 

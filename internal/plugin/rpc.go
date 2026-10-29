@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // DefaultMaxFrame bounds a single message. A tool result can be large (a ticket
@@ -42,6 +44,9 @@ type response struct {
 	ID      json.Number     `json:"id"`
 	Result  json.RawMessage `json:"result,omitempty"`
 	Error   *rpcError       `json:"error,omitempty"`
+	// local is why the channel failed a call ITSELF, kept as the error it is
+	// so its code survives to the report; Error carries the same as text.
+	local error
 }
 
 type rpcError struct {
@@ -117,12 +122,11 @@ func (c *Conn) fail(err error) {
 	close(c.closeCh)
 	c.mu.Unlock()
 
-	msg := "channel closed"
-	if err != nil {
-		msg = err.Error()
+	if err == nil {
+		err = problem.New("channel_closed")
 	}
 	for id, ch := range pending {
-		ch <- response{ID: json.Number(id), Error: &rpcError{Code: -32000, Message: msg}}
+		ch <- response{ID: json.Number(id), Error: &rpcError{Code: -32000, Message: err.Error()}, local: err}
 	}
 }
 
@@ -163,9 +167,9 @@ func (c *Conn) read(r io.Reader) {
 	}
 	err := sc.Err()
 	if errors.Is(err, bufio.ErrTooLong) {
-		err = fmt.Errorf("plugin sent a frame larger than the %d byte limit", c.maxFrame)
+		err = problem.New("frame_too_large", c.maxFrame)
 	} else if err == nil {
-		err = errors.New("plugin closed the channel")
+		err = problem.New("plugin_closed")
 	}
 	c.fail(err)
 }
@@ -232,7 +236,7 @@ func (c *Conn) Notify(method string, params any) error {
 	c.mu.Unlock()
 	if closed {
 		if err == nil {
-			err = errors.New("channel closed")
+			err = problem.New("channel_closed")
 		}
 		return err
 	}
@@ -240,7 +244,7 @@ func (c *Conn) Notify(method string, params any) error {
 	if params != nil {
 		b, mErr := json.Marshal(params)
 		if mErr != nil {
-			return fmt.Errorf("encode params: %w", mErr)
+			return problem.Wrap("encode_params", mErr)
 		}
 		raw = b
 	}
@@ -266,7 +270,7 @@ func (c *Conn) call(ctx context.Context, id int64, method string, params, result
 		err := c.err
 		c.mu.Unlock()
 		if err == nil {
-			err = errors.New("channel closed")
+			err = problem.New("channel_closed")
 		}
 		return err
 	}
@@ -277,7 +281,7 @@ func (c *Conn) call(ctx context.Context, id int64, method string, params, result
 	if params != nil {
 		b, err := json.Marshal(params)
 		if err != nil {
-			return fmt.Errorf("encode params: %w", err)
+			return problem.Wrap("encode_params", err)
 		}
 		raw = b
 	}
@@ -290,6 +294,9 @@ func (c *Conn) call(ctx context.Context, id int64, method string, params, result
 		c.mu.Unlock()
 		return ctx.Err()
 	case res := <-ch:
+		if res.local != nil {
+			return res.local
+		}
 		if res.Error != nil {
 			return res.Error
 		}

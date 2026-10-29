@@ -2,7 +2,10 @@
 
 package plugin
 
-import "os/exec"
+import (
+	"github.com/buffsystems/buff-connector/internal/problem"
+	"os/exec"
+)
 
 // Windows has no equivalent we are willing to ship yet: running a child under
 // another account needs LogonUser/CreateProcessAsUser, i.e. a local service
@@ -11,8 +14,7 @@ import "os/exec"
 // connector says so rather than running them unisolated.
 func CheckPrivilege() Privilege {
 	return Privilege{
-		Reason: "plugins are not supported on Windows yet: isolating them needs a " +
-			"dedicated local service account, which the installer does not create",
+		Reason: problem.New("no_isolation_windows"),
 	}
 }
 

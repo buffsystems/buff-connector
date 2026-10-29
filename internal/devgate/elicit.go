@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // askFunc shows the person a form and says what they chose.
@@ -88,14 +90,14 @@ func (s *mcpServer) asker(sessionID string, stream *eventStream) askFunc {
 
 // deliver hands the person's answer to the call waiting on it. An answer nobody asked for
 // in this session is refused: one session cannot answer another's question.
-func (s *mcpServer) deliver(w http.ResponseWriter, sessionID string, req rpcRequest) {
+func (s *mcpServer) deliver(w http.ResponseWriter, lang i18n.Lang, sessionID string, req rpcRequest) {
 	var id string
 	_ = json.Unmarshal(req.ID, &id)
 	s.mu.Lock()
 	answer, ok := s.pending[sessionID+"\x00"+id]
 	s.mu.Unlock()
 	if !ok {
-		rpcError(w, http.StatusBadRequest, req.ID, -32600, "на этот вопрос ответа не ждут")
+		rpcError(w, lang, http.StatusBadRequest, req.ID, -32600, "на этот вопрос ответа не ждут")
 		return
 	}
 	result := req.Result

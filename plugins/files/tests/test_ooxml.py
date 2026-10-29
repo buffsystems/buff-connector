@@ -12,6 +12,7 @@ import unittest
 import zipfile
 
 HERE = os.path.dirname(__file__)
+sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "sdk"))
 sys.path.insert(0, os.path.join(HERE, ".."))
 
 import docx  # noqa: E402

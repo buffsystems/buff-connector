@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -78,7 +79,7 @@ func (m *PluginManager) prepare(ctx context.Context, source, origin string, fetc
 		return draft, nil
 	}
 	if !m.starter.Priv.CanSwitchUID {
-		draft.Needs = "зависимости не установлены: " + m.starter.Priv.Reason
+		draft.Needs = fmt.Sprintf("зависимости не установлены: %s", m.starter.Priv.Reason)
 		return draft, nil
 	}
 	home, err := plugin.PrepareInstanceDir(m.stateDir, draft.ID, uid, uid)
@@ -87,7 +88,7 @@ func (m *PluginManager) prepare(ctx context.Context, source, origin string, fetc
 	}
 	draft.Log, err = mcpsource.Install(ctx, dir, draft.Launch, draft.Toolchain, m.runner(uid, home))
 	if err != nil {
-		draft.Needs = "зависимости не установились: " + err.Error()
+		draft.Needs = fmt.Sprintf("зависимости не установились: %v", err)
 	}
 	return draft, nil
 }

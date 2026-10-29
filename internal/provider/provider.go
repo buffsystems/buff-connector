@@ -74,9 +74,9 @@ type Provider interface {
 // the shared httpx sentinels so a caller can match on either layer.
 var (
 	// ErrNoAccess maps to a 401/403 from the provider.
-	ErrNoAccess = fmt.Errorf("provider: no access to repository: %w", httpx.ErrNoAccess)
+	ErrNoAccess = fmt.Errorf("провайдер — нет доступа к репозиторию: %w", httpx.ErrNoAccess)
 	// ErrNotFound maps to a 404 from the provider.
-	ErrNotFound = fmt.Errorf("provider: repository not found: %w", httpx.ErrNotFound)
+	ErrNotFound = fmt.Errorf("провайдер — репозиторий не найден: %w", httpx.ErrNotFound)
 )
 
 // New builds a Provider for the given kind. repoPath is "owner/repo" for every
@@ -112,7 +112,7 @@ func New(kind Kind, baseURL, repoPath string, httpClient *http.Client) (Provider
 	case KindBitbucketServer:
 		return newBitbucketServer(base, a, b, httpClient)
 	default:
-		return nil, fmt.Errorf("provider: unknown kind %q", kind)
+		return nil, fmt.Errorf("провайдер — неизвестный вид %q", kind)
 	}
 }
 
@@ -121,7 +121,7 @@ func New(kind Kind, baseURL, repoPath string, httpClient *http.Client) (Provider
 func parseRepoPath(repoPath string) (string, string, error) {
 	parts := strings.Split(trimRepoPath(repoPath), "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("provider: repo path %q must be \"owner/repo\"", repoPath)
+		return "", "", fmt.Errorf("провайдер — путь репозитория %q должен быть \"владелец/репозиторий\"", repoPath)
 	}
 	return parts[0], parts[1], nil
 }
@@ -135,7 +135,7 @@ func parseNestedRepoPath(repoPath string) (string, string, error) {
 	p := trimRepoPath(repoPath)
 	i := strings.LastIndex(p, "/")
 	if i <= 0 || i == len(p)-1 {
-		return "", "", fmt.Errorf("provider: repo path %q must be \"namespace/repo\"", repoPath)
+		return "", "", fmt.Errorf("провайдер — путь репозитория %q должен быть \"пространство/репозиторий\"", repoPath)
 	}
 	return p[:i], p[i+1:], nil
 }

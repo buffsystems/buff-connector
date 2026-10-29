@@ -10,6 +10,7 @@ import (
 	"github.com/buffsystems/buff-connector/internal/config"
 	"github.com/buffsystems/buff-connector/internal/mcpsource"
 	"github.com/buffsystems/buff-connector/internal/plugin"
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // A custom MCP server (#351) is started the way a catalogue plugin is — its own
@@ -69,7 +70,7 @@ func (m *PluginManager) startCustom(p *config.PluginInstance, fp string, report 
 	expand := func(s string) (string, error) {
 		out, err := mcpsource.Expand(s, vars)
 		if err != nil {
-			return "", fmt.Errorf("%s: %w — fill the setting in, or remove it from the command", s, err)
+			return "", problem.Wrap("command_value_missing", err, s)
 		}
 		return out, nil
 	}
@@ -121,7 +122,7 @@ func (m *PluginManager) startCustom(p *config.PluginInstance, fp string, report 
 
 	if err := inst.Start(m.base); err != nil {
 		report.Status = string(inst.State().Status)
-		report.LastError = err.Error()
+		report.LastError, report.Problem = err.Error(), problem.From(err)
 	} else {
 		report.Status = string(plugin.StatusRunning)
 	}
@@ -152,7 +153,7 @@ func (m *PluginManager) startRemote(p *config.PluginInstance, fp string, report 
 	}, nil)
 	if err := inst.Start(m.base); err != nil {
 		report.Status = string(inst.State().Status)
-		report.LastError = err.Error()
+		report.LastError, report.Problem = err.Error(), problem.From(err)
 	} else {
 		report.Status = string(plugin.StatusRunning)
 	}

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/buffsystems/buff-connector/internal/problem"
 )
 
 // The channel carries JSON-RPC 2.0 in both directions over one pair of pipes:
@@ -143,7 +145,7 @@ func TestOversizeFrameFailsLoudly(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	err := host.call(ctx, 1, "noop", nil, nil)
-	if err == nil || !strings.Contains(err.Error(), "frame") {
+	if err == nil || !errors.Is(err, problem.New("frame_too_large")) {
 		t.Fatalf("err = %v, want a frame-size error", err)
 	}
 	if !host.Closed() {

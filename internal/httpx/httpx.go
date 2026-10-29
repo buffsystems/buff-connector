@@ -20,9 +20,9 @@ const UserAgent = "buff-connector"
 // Sentinel errors returned by AccessErrForStatus.
 var (
 	// ErrNoAccess maps to a 401/403 from the remote.
-	ErrNoAccess = errors.New("no access")
+	ErrNoAccess = errors.New("нет доступа")
 	// ErrNotFound maps to a 404 from the remote.
-	ErrNotFound = errors.New("not found")
+	ErrNotFound = errors.New("не найдено")
 )
 
 // Resp is the decoded shape of a response we care about.
@@ -42,13 +42,13 @@ func DoJSON(ctx context.Context, client *http.Client, method, url string, body a
 	if body != nil {
 		buf, err := json.Marshal(body)
 		if err != nil {
-			return Resp{}, fmt.Errorf("encode body: %w", err)
+			return Resp{}, fmt.Errorf("кодирование тела запроса: %w", err)
 		}
 		reader = bytes.NewReader(buf)
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, reader)
 	if err != nil {
-		return Resp{}, fmt.Errorf("build request: %w", err)
+		return Resp{}, fmt.Errorf("подготовка запроса: %w", err)
 	}
 	req.Header.Set("User-Agent", UserAgent)
 	if body != nil {
@@ -65,7 +65,7 @@ func DoJSON(ctx context.Context, client *http.Client, method, url string, body a
 func DoRaw(ctx context.Context, client *http.Client, method, url string, body io.Reader, headers map[string]string) (Resp, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return Resp{}, fmt.Errorf("build request: %w", err)
+		return Resp{}, fmt.Errorf("подготовка запроса: %w", err)
 	}
 	req.Header.Set("User-Agent", UserAgent)
 	for k, v := range headers {
@@ -77,12 +77,12 @@ func DoRaw(ctx context.Context, client *http.Client, method, url string, body io
 func do(client *http.Client, req *http.Request, method, url string) (Resp, error) {
 	resp, err := client.Do(req)
 	if err != nil {
-		return Resp{}, fmt.Errorf("request %s %s: %w", method, url, err)
+		return Resp{}, fmt.Errorf("запрос %s %s: %w", method, url, err)
 	}
 	defer resp.Body.Close()
 	buf, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return Resp{}, fmt.Errorf("read response: %w", err)
+		return Resp{}, fmt.Errorf("чтение ответа: %w", err)
 	}
 	return Resp{Status: resp.StatusCode, Body: buf}, nil
 }
@@ -99,7 +99,7 @@ func AccessErrForStatus(r Resp) error {
 	case r.Status == http.StatusNotFound:
 		return ErrNotFound
 	default:
-		return fmt.Errorf("unexpected status %d: %s", r.Status, Message(r.Body))
+		return fmt.Errorf("неожиданный ответ %d: %s", r.Status, Message(r.Body))
 	}
 }
 
@@ -140,7 +140,7 @@ func Message(body []byte) string {
 // Decode unmarshals a JSON body into v, wrapping errors.
 func Decode(body []byte, v any) error {
 	if err := json.Unmarshal(body, v); err != nil {
-		return fmt.Errorf("decode response: %w", err)
+		return fmt.Errorf("разбор ответа: %w", err)
 	}
 	return nil
 }

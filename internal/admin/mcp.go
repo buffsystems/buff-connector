@@ -35,12 +35,12 @@ const prepareTimeout = 30 * time.Minute
 // with the draft.
 func (s *Server) mcpUpload(w http.ResponseWriter, r *http.Request) {
 	if s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "plugins are not enabled"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "плагины не включены"})
 		return
 	}
 	file, header, err := r.FormFile("archive")
 	if err != nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "no archive in the request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "в запросе нет архива"})
 		return
 	}
 	defer file.Close()
@@ -65,7 +65,7 @@ func (s *Server) mcpGitHub(w http.ResponseWriter, r *http.Request) {
 		Token string `json:"token"`
 	}
 	if err := readJSON(r, &req); err != nil || s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), prepareTimeout)
@@ -112,7 +112,7 @@ type mcpSaveReq struct {
 func (s *Server) mcpSave(w http.ResponseWriter, r *http.Request) {
 	var req mcpSaveReq
 	if err := readJSON(r, &req); err != nil || s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	cfg, err := config.LoadLenient(s.cfgPath)
@@ -214,7 +214,7 @@ func (s *Server) mcpMarks(w http.ResponseWriter, r *http.Request) {
 		Fingerprint string   `json:"fingerprint"`
 	}
 	if err := readJSON(r, &req); err != nil || s.plugins == nil {
-		writeJSON(w, 400, map[string]any{"ok": false, "error": "bad request"})
+		writeJSON(w, 400, map[string]any{"ok": false, "error": "неверный запрос"})
 		return
 	}
 	cfg, err := config.LoadLenient(s.cfgPath)
@@ -224,7 +224,7 @@ func (s *Server) mcpMarks(w http.ResponseWriter, r *http.Request) {
 	}
 	inst := findInstance(cfg, req.ID)
 	if inst == nil || inst.MCP == nil {
-		writeJSON(w, 404, map[string]any{"ok": false, "error": "no custom server with this id"})
+		writeJSON(w, 404, map[string]any{"ok": false, "error": "нет своего сервера с таким id"})
 		return
 	}
 	inst.MCP.ReadOnly = req.ReadOnly

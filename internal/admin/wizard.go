@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/provider"
 )
 
@@ -70,9 +71,9 @@ func RunWizard(ctx context.Context, cfgPath, version string, pair PairFunc, in i
 	ask := newAsker(in, out)
 
 	cur, _ := config.LoadLenient(cfgPath)
-	fmt.Fprintln(out, "Настройка коннектора Buff. Токен остаётся у вас (в локальном файле).")
-	mw := ask("Адрес relay (обычно менять не нужно)", firstNonEmpty(cur.MiddlewareURL, config.DefaultRelay))
-	stateDir := ask("Каталог состояния (state_dir)", firstNonEmpty(cur.StateDir, "/var/lib/connector"))
+	fmt.Fprintln(out, i18n.T("Настройка коннектора Buff. Токен остаётся у вас (в локальном файле)."))
+	mw := ask(i18n.T("Адрес relay (обычно менять не нужно)"), firstNonEmpty(cur.MiddlewareURL, config.DefaultRelay))
+	stateDir := ask(i18n.T("Каталог состояния (state_dir)"), firstNonEmpty(cur.StateDir, "/var/lib/connector"))
 	cfg := &config.Config{MiddlewareURL: mw, StateDir: stateDir}
 
 	secretsDir := filepath.Join(stateDir, "secrets")
@@ -80,26 +81,26 @@ func RunWizard(ctx context.Context, cfgPath, version string, pair PairFunc, in i
 		return err
 	}
 	for {
-		kind := ask("Провайдер (gitlab/ghe/github/gitea/bitbucket-server/bitbucket, пусто=готово)", "")
+		kind := ask(i18n.T("Провайдер (gitlab/ghe/github/gitea/bitbucket-server/bitbucket, пусто=готово)"), "")
 		if kind == "" {
 			break
 		}
 		base := ask("Base URL", "")
-		token := ask("Токен доступа", "")
+		token := ask(i18n.T("Токен доступа"), "")
 		p, err := provider.New(provider.Kind(kind), base, "_/_", nil)
 		if err != nil {
-			fmt.Fprintf(out, "  ошибка: %v\n", err)
+			fmt.Fprint(out, i18n.Sprintf("  ошибка: %v\n", err))
 			continue
 		}
 		lctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 		repos, err := p.ListRepos(lctx, token)
 		cancel()
 		if err != nil {
-			fmt.Fprintf(out, "  нет доступа: %v\n", err)
+			fmt.Fprint(out, i18n.Sprintf("  нет доступа: %v\n", err))
 			continue
 		}
 		if len(repos) == 0 {
-			fmt.Fprintln(out, "  токен валиден, но репозиториев не видно — пропускаю")
+			fmt.Fprintln(out, i18n.T("  токен валиден, но репозиториев не видно — пропускаю"))
 			continue
 		}
 		for i, r := range repos {
@@ -109,9 +110,9 @@ func RunWizard(ctx context.Context, cfgPath, version string, pair PairFunc, in i
 			}
 			fmt.Fprintf(out, "   %d) %s%s\n", i+1, r.Repo, priv)
 		}
-		sel := parseSelection(ask("Выберите репозитории (напр. 1,3 или all)", ""), len(repos))
+		sel := parseSelection(ask(i18n.T("Выберите репозитории (напр. 1,3 или all)"), ""), len(repos))
 		if len(sel) == 0 {
-			fmt.Fprintln(out, "  ничего не выбрано — пропускаю провайдера")
+			fmt.Fprintln(out, i18n.T("  ничего не выбрано — пропускаю провайдера"))
 			continue
 		}
 		chosen := make([]string, 0, len(sel))
@@ -123,22 +124,21 @@ func RunWizard(ctx context.Context, cfgPath, version string, pair PairFunc, in i
 			return err
 		}
 		cfg.Providers = append(cfg.Providers, config.Provider{Kind: kind, BaseURL: base, Repos: chosen, TokenFile: tokenFile})
-		fmt.Fprintf(out, "  добавлено: %s (%d репо)\n", kind, len(chosen))
+		fmt.Fprint(out, i18n.Sprintf("  добавлено: %s (%d репо)\n", kind, len(chosen)))
 	}
 
 	// Integrations are no longer configured here: they come from the catalogue,
 	// and the wizard's job ends at git. `connector catalog` and `connector
 	// install` are the path, and the local page shows the same catalogue.
 	if len(cfg.Providers) == 0 && len(cfg.Plugins) == 0 {
-		fmt.Fprintln(out, "\nНи одного провайдера не добавлено. Это допустимо: интеграции")
-		fmt.Fprintln(out, "ставятся отдельно — посмотрите `connector catalog`.")
+		fmt.Fprintln(out, i18n.T("\nНи одного провайдера не добавлено. Это допустимо: интеграции\nставятся отдельно — посмотрите `connector catalog`."))
 	}
 	if err := config.Save(cfgPath, cfg); err != nil {
 		return err
 	}
-	fmt.Fprintf(out, "Конфиг сохранён: %s\n", cfgPath)
+	fmt.Fprint(out, i18n.Sprintf("Конфиг сохранён: %s\n", cfgPath))
 
-	code := ask("Код привязки из приложения Buff (пусто=позже)", "")
+	code := ask(i18n.T("Код привязки из приложения Buff (пусто=позже)"), "")
 	if code != "" {
 		loaded, err := config.Load(cfgPath)
 		if err != nil {
@@ -146,12 +146,12 @@ func RunWizard(ctx context.Context, cfgPath, version string, pair PairFunc, in i
 		}
 		label, _ := os.Hostname()
 		if err := pair(loaded, code, label, version); err != nil {
-			fmt.Fprintf(out, "привязка не удалась: %v\n", err)
+			fmt.Fprint(out, i18n.Sprintf("привязка не удалась: %v\n", err))
 			return err
 		}
-		fmt.Fprintln(out, "готово — агент привязан. Запустите: connector run --config", cfgPath)
+		fmt.Fprint(out, i18n.Sprintf("готово — агент привязан. Запустите: connector run --config %s\n", cfgPath))
 	} else {
-		fmt.Fprintln(out, "Позже выполните: connector pair --config", cfgPath, "--code <код>")
+		fmt.Fprint(out, i18n.Sprintf("Позже выполните: connector pair --config %s --code <код>\n", cfgPath))
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import posixpath
 
+from buff_plugin import say
 from ooxml import NS, Package, md_table, tag
 
 _A = "{%s}" % NS["a"]
@@ -16,11 +17,12 @@ def text_of(data: bytes) -> str:
     out: list[str] = []
     for n, part in enumerate(_slides(pkg), 1):
         title, blocks = _slide(pkg.xml(part))
-        out += [f"## Слайд {n}. {title}".rstrip(". ") if title else f"## Слайд {n}", ""]
+        heading = say(f"## Слайд {n}", f"## Slide {n}")
+        out += [f"{heading}. {title}".rstrip(". ") if title else heading, ""]
         out += blocks
         notes = _notes(pkg, part)
         if notes:
-            out += [f"Заметки: {notes}", ""]
+            out += [say(f"Заметки: {notes}", f"Notes: {notes}"), ""]
     return "\n".join(out) + "\n"
 
 

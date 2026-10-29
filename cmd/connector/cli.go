@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/buffsystems/buff-connector/internal/config"
+	"github.com/buffsystems/buff-connector/internal/i18n"
 	"github.com/buffsystems/buff-connector/internal/plugin"
 )
 
@@ -35,9 +35,9 @@ func cmdCatalog(args []string) {
 			name, args = args[0], args[1:]
 		}
 	}
-	fs := flag.NewFlagSet("catalog", flag.ExitOnError)
-	cfgPath := fs.String("config", "", "path to connector.yaml")
-	_ = fs.Parse(args)
+	fs := i18n.Flags("catalog")
+	cfgPath := fs.String("config", "", i18n.T("путь к connector.yaml"))
+	i18n.ParseFlags(fs, args)
 	rest := []string{}
 	if verb != "" {
 		rest = append(rest, verb)
@@ -51,29 +51,30 @@ func cmdCatalog(args []string) {
 	idx, err := client.Fetch(ctx)
 	if err != nil {
 		if cached, cErr := client.Cached(); cErr == nil {
-			fmt.Fprintf(os.Stderr, "catalogue unreachable (%v) — showing the last one read\n", err)
+			fmt.Fprint(os.Stderr, i18n.Sprintf("каталог недоступен (%v) — показываю последний прочитанный\n", err))
 			idx = cached
 		} else {
-			fatal("catalogue: %v", err)
+			fatal("каталог: %v", err)
 		}
 	}
+	idx = idx.InLang(i18n.Default())
 	if len(rest) > 1 && rest[0] == "show" {
 		for _, e := range idx.Plugins {
 			if e.Name != rest[1] {
 				continue
 			}
-			fmt.Printf("%s — %s\nиздатель: %s\n", e.Name, e.Summary, e.Publisher)
+			say("%s — %s\nиздатель: %s\n", e.Name, e.Summary, e.Publisher)
 			for _, v := range e.Versions {
-				fmt.Printf("\n  версия %s (host API %d)%s\n", v.Version, v.HostAPI, statusSuffix(v.Status, v.Reason))
-				fmt.Printf("    выход наружу: по полям %s\n", strings.Join(v.EgressFrom, ", "))
-				fmt.Printf("    учётные данные: %s\n", orNone(strings.Join(v.Creds, ", ")))
-				fmt.Printf("    вебхуки: %s\n", orNone(v.Webhook))
+				say("\n  версия %s (host API %d)%s\n", v.Version, v.HostAPI, statusSuffix(v.Status, v.Reason))
+				say("    выход наружу: по полям %s\n", strings.Join(v.EgressFrom, ", "))
+				say("    учётные данные: %s\n", orNone(strings.Join(v.Creds, ", ")))
+				say("    вебхуки: %s\n", orNone(v.Webhook))
 				for _, t := range v.Tools {
 					ro := ""
 					if t.ReadOnly {
-						ro = " [только чтение]"
+						ro = i18n.T(" [только чтение]")
 					}
-					fmt.Printf("    инструмент %s%s — %s\n", t.Name, ro, t.Summary)
+					say("    инструмент %s%s — %s\n", t.Name, ro, t.Summary)
 				}
 			}
 			return
@@ -83,7 +84,7 @@ func cmdCatalog(args []string) {
 
 	for _, e := range idx.Plugins {
 		v, ok := e.LatestCompatible(plugin.SupportedHostAPI)
-		latest := "нет совместимой версии"
+		latest := i18n.T("нет совместимой версии")
 		if ok {
 			latest = v.Version
 		}
@@ -93,12 +94,12 @@ func cmdCatalog(args []string) {
 
 func cmdInstall(args []string) {
 	if len(args) == 0 || strings.HasPrefix(args[0], "-") {
-		fatal("usage: connector install <plugin>[@version] --config <path>")
+		fatal("использование: connector install <плагин>[@версия] --config <путь>")
 	}
 	ref, args := args[0], args[1:]
-	fs := flag.NewFlagSet("install", flag.ExitOnError)
-	cfgPath := fs.String("config", "", "path to connector.yaml")
-	_ = fs.Parse(args)
+	fs := i18n.Flags("install")
+	cfgPath := fs.String("config", "", i18n.T("путь к connector.yaml"))
+	i18n.ParseFlags(fs, args)
 	name, version, _ := strings.Cut(ref, "@")
 
 	cfg := mustLoadLenient(*cfgPath)
@@ -106,7 +107,7 @@ func cmdInstall(args []string) {
 	ctx := context.Background()
 	idx, err := client.Fetch(ctx)
 	if err != nil {
-		fatal("catalogue: %v", err)
+		fatal("каталог: %v", err)
 	}
 	if version == "" {
 		for _, e := range idx.Plugins {
@@ -125,17 +126,17 @@ func cmdInstall(args []string) {
 	}
 	bundle, sig, err := client.Download(ctx, entry.Name, v)
 	if err != nil {
-		fatal("download: %v", err)
+		fatal("скачивание: %v", err)
 	}
 	store := plugin.NewStore(cfg.StateDir, plugin.TrustedKeys, nil)
 	in, err := store.Install(bundle, sig)
 	if err != nil {
-		fatal("install: %v", err)
+		fatal("установка: %v", err)
 	}
 	if err := store.Record(in); err != nil {
-		fatal("record: %v", err)
+		fatal("запись: %v", err)
 	}
-	fmt.Printf("установлен %s %s (%s)\n", in.Manifest.Name, in.Manifest.Version, in.Digest[:12])
+	say("установлен %s %s (%s)\n", in.Manifest.Name, in.Manifest.Version, in.Digest[:12])
 }
 
 func cmdInstance(args []string) {
@@ -143,7 +144,7 @@ func cmdInstance(args []string) {
 	// non-flag argument, so parsing before taking the verb would swallow every
 	// flag after it and report them as missing.
 	if len(args) == 0 {
-		fatal("usage: connector instance list|show|set|secret|signin|rm|enable|disable|check|log [ref] --config <path>")
+		fatal("использование: connector instance list|show|set|secret|signin|rm|enable|disable|check|log [подключение] --config <путь>")
 	}
 	verb, args := args[0], args[1:]
 	// The optional reference (id or slug) comes before the flags too, for the
@@ -153,32 +154,32 @@ func cmdInstance(args []string) {
 		ref, args = args[0], args[1:]
 	}
 
-	fs := flag.NewFlagSet("instance", flag.ExitOnError)
-	cfgPath := fs.String("config", "", "path to connector.yaml")
-	alias := fs.String("alias", "", "human name for this connection")
-	devProject := fs.String("dev-project", "", "project the work lands in")
-	pluginName := fs.String("plugin", "", "plugin name")
-	version := fs.String("version", "", "plugin version to pin this instance to")
+	fs := i18n.Flags("instance")
+	cfgPath := fs.String("config", "", i18n.T("путь к connector.yaml"))
+	alias := fs.String("alias", "", i18n.T("человеческое имя подключения"))
+	devProject := fs.String("dev-project", "", i18n.T("проект, в который попадает работа"))
+	pluginName := fs.String("plugin", "", i18n.T("имя плагина"))
+	version := fs.String("version", "", i18n.T("версия плагина, на которой закреплено подключение"))
 	set := multiFlag{}
 	fs.Var(&set, "set", "setting, key=value (repeatable)")
-	poll := fs.Int("poll", -1, "how often to read this connection, in seconds (0 = the plugin's suggestion)")
-	aiNotes := fs.String("ai-notes", "", "notes for the model about this connection (free text)")
-	aiNotesFile := fs.String("ai-notes-file", "", "read the notes for the model from a file (\"-\" = stdin)")
-	aiUnbounded := fs.String("ai-notes-unbounded", "", "true|false: lift the 2048-character limit on the notes, accepting that a long text can make the model worse")
-	secret := fs.String("secret", "", "credential name to read from stdin")
-	account := fs.String("account", "", "account the secret belongs to, for basic auth (email or login)")
-	kind := fs.String("kind", "", "how the secret authenticates, when the plugin offers a choice (service_account, oauth2, …)")
-	dryRun := fs.Bool("dry-run", false, "validate and show the difference without writing")
-	addr := fs.String("addr", defaultAdminAddr, "local admin address, for live checks")
-	_ = fs.Parse(args)
+	poll := fs.Int("poll", -1, i18n.T("как часто читать подключение, в секундах (0 — как предлагает плагин)"))
+	aiNotes := fs.String("ai-notes", "", i18n.T("заметки для модели об этом подключении (свободный текст)"))
+	aiNotesFile := fs.String("ai-notes-file", "", i18n.T("прочитать заметки для модели из файла (\"-\" — stdin)"))
+	aiUnbounded := fs.String("ai-notes-unbounded", "", i18n.T("true|false: снять предел в 2048 символов на заметки, понимая, что длинный текст может ухудшить работу модели"))
+	secret := fs.String("secret", "", i18n.T("имя учётных данных, которые читаются из stdin"))
+	account := fs.String("account", "", i18n.T("учётная запись, которой принадлежит секрет, для basic auth (почта или логин)"))
+	kind := fs.String("kind", "", i18n.T("как секрет входит, когда плагин предлагает выбор (service_account, oauth2, …)"))
+	dryRun := fs.Bool("dry-run", false, i18n.T("проверить и показать разницу, ничего не записывая"))
+	addr := fs.String("addr", defaultAdminAddr, i18n.T("адрес локальной страницы, для живых проверок"))
+	i18n.ParseFlags(fs, args)
 
 	switch verb {
 	case "list":
 		cfg := mustLoadLenient(*cfgPath)
 		for _, p := range cfg.Plugins {
-			state := "включено"
+			state := i18n.T("включено")
 			if !p.IsEnabled() {
-				state = "выключено"
+				state = i18n.T("выключено")
 			}
 			fmt.Printf("%s  %-16s %-10s %-8s %s\n", p.ID, p.Slug, p.Plugin, p.Version, state)
 			if p.Alias != "" {
@@ -207,7 +208,7 @@ func cmdInstance(args []string) {
 	case "log":
 		liveGet(*addr, "/api/instances/log?id="+mustID(*cfgPath, ref))
 	default:
-		fatal("unknown instance command %q", verb)
+		fatal("неизвестная команда подключения %q", verb)
 	}
 }
 
@@ -225,7 +226,7 @@ func instanceSet(cfgPath, ref, pluginName, version, alias, devProject string, se
 	}
 	if inst == nil {
 		if pluginName == "" || version == "" {
-			fatal("a new instance needs --plugin and --version")
+			fatal("новому подключению нужны --plugin и --version")
 		}
 		cfg.Plugins = append(cfg.Plugins, config.PluginInstance{ID: config.NewInstanceID()})
 		inst = &cfg.Plugins[len(cfg.Plugins)-1]
@@ -276,7 +277,7 @@ func instanceSet(cfgPath, ref, pluginName, version, alias, devProject string, se
 	for _, kv := range set {
 		key, value, ok := strings.Cut(kv, "=")
 		if !ok {
-			fatal("--set expects key=value, got %q", kv)
+			fatal("--set ждёт ключ=значение, а получил %q", kv)
 		}
 		inst.Config[key] = coerce(schema, key, value)
 	}
@@ -291,7 +292,7 @@ func instanceSet(cfgPath, ref, pluginName, version, alias, devProject string, se
 
 	if dryRun {
 		out, _ := json.MarshalIndent(redact(inst), "", "  ")
-		fmt.Printf("проверено, записано НЕ будет:\n%s\n", out)
+		say("проверено, записано НЕ будет:\n%s\n", out)
 		return
 	}
 	fp, err := config.Fingerprint(cfgPath)
@@ -301,7 +302,7 @@ func instanceSet(cfgPath, ref, pluginName, version, alias, devProject string, se
 	if err := config.SaveIf(cfgPath, cfg, fp); err != nil {
 		fatal("%v", err)
 	}
-	fmt.Printf("сохранено: %s (%s)\n", inst.Slug, inst.ID)
+	say("сохранено: %s (%s)\n", inst.Slug, inst.ID)
 }
 
 // applyAINotes edits the notes for the model from the flags that were GIVEN
@@ -310,7 +311,7 @@ func instanceSet(cfgPath, ref, pluginName, version, alias, devProject string, se
 // before lifting it has no equivalent here, so the word has to be typed.
 func applyAINotes(inst *config.PluginInstance, text, file, unbounded string) error {
 	if text != "" && file != "" {
-		return fmt.Errorf("--ai-notes and --ai-notes-file together: give the notes one way")
+		return fmt.Errorf("--ai-notes и --ai-notes-file вместе — передайте заметки одним способом")
 	}
 	if text != "" {
 		inst.AINotes = text
@@ -324,7 +325,7 @@ func applyAINotes(inst *config.PluginInstance, text, file, unbounded string) err
 			b, err = os.ReadFile(file)
 		}
 		if err != nil {
-			return fmt.Errorf("read --ai-notes-file: %w", err)
+			return fmt.Errorf("чтение --ai-notes-file: %w", err)
 		}
 		inst.AINotes = string(b)
 	}
@@ -335,7 +336,7 @@ func applyAINotes(inst *config.PluginInstance, text, file, unbounded string) err
 	case "false":
 		inst.AINotesUnbounded = false
 	default:
-		return fmt.Errorf("--ai-notes-unbounded expects true or false, got %q", unbounded)
+		return fmt.Errorf("--ai-notes-unbounded ждёт true или false, а получил %q", unbounded)
 	}
 	return nil
 }
@@ -360,15 +361,15 @@ func credentialSpec(man *plugin.Manifest, name string) (kinds []string, header s
 
 func instanceSecret(cfgPath, ref, name, account, kind string) {
 	if name == "" {
-		fatal("--secret <name> is required")
+		fatal("нужен --secret <имя>")
 	}
 	cfg := mustLoadLenient(cfgPath)
 	inst := instanceByRef(cfg, ref)
 
-	fmt.Fprintln(os.Stderr, "введите значение и нажмите Ctrl-D:")
+	fmt.Fprintln(os.Stderr, i18n.T("введите значение и нажмите Ctrl-D:"))
 	value, err := io.ReadAll(bufio.NewReader(os.Stdin))
 	if err != nil {
-		fatal("read: %v", err)
+		fatal("чтение: %v", err)
 	}
 	trimmed := strings.TrimSpace(string(value))
 	if trimmed == "" {
@@ -408,9 +409,12 @@ func instanceSecret(cfgPath, ref, name, account, kind string) {
 	if err := config.SaveIf(cfgPath, cfg, fp); err != nil {
 		fatal("%v", err)
 	}
-	fmt.Printf("записано в %s (права 0600), в конфиг попала только ссылка\n", file)
-	fmt.Printf("вид доступа: %s%s\n", cred.Kind,
-		map[bool]string{true: ", учётная запись " + cred.Username}[cred.Username != ""])
+	say("записано в %s (права 0600), в конфиг попала только ссылка\n", file)
+	if cred.Username != "" {
+		say("вид доступа: %s, учётная запись %s\n", cred.Kind, cred.Username)
+	} else {
+		say("вид доступа: %s\n", cred.Kind)
+	}
 }
 
 func containsKind(kinds []string, kind string) bool {
@@ -427,7 +431,7 @@ func containsKind(kinds []string, kind string) bool {
 // have a browser, and pastes the address the source returned them to.
 func instanceSignIn(addr, id, name string) {
 	if name == "" {
-		fatal("--secret <name> is required: which credential to sign in")
+		fatal("нужен --secret <имя> — какие учётные данные входят")
 	}
 	var started struct {
 		OK    bool   `json:"ok"`
@@ -438,12 +442,12 @@ func instanceSignIn(addr, id, name string) {
 	if !started.OK {
 		fatal("%s", started.Error)
 	}
-	fmt.Println("откройте в браузере и войдите:")
+	say("откройте в браузере и войдите:\n")
 	fmt.Println("  " + started.URL)
-	fmt.Fprintln(os.Stderr, "затем вставьте сюда адрес страницы, на которую вернул источник (или код из него), и нажмите Enter:")
+	fmt.Fprintln(os.Stderr, i18n.T("затем вставьте сюда адрес страницы, на которую вернул источник (или код из него), и нажмите Enter:"))
 	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
 	if err != nil && line == "" {
-		fatal("read: %v", err)
+		fatal("чтение: %v", err)
 	}
 	var done struct {
 		OK      bool   `json:"ok"`
@@ -454,14 +458,18 @@ func instanceSignIn(addr, id, name string) {
 	if !done.OK {
 		fatal("%s", done.Error)
 	}
-	fmt.Printf("вход выполнен%s\n", map[bool]string{true: " как " + done.Account}[done.Account != ""])
+	if done.Account != "" {
+		say("вход выполнен как %s\n", done.Account)
+	} else {
+		say("вход выполнен\n")
+	}
 }
 
 func instanceRemove(cfgPath, ref string, dryRun bool) {
 	cfg := mustLoadLenient(cfgPath)
 	inst := instanceByRef(cfg, ref)
 	if dryRun {
-		fmt.Printf("будет удалено: %s (%s)\n", inst.Slug, inst.ID)
+		say("будет удалено: %s (%s)\n", inst.Slug, inst.ID)
 		return
 	}
 	kept := cfg.Plugins[:0]
@@ -475,7 +483,7 @@ func instanceRemove(cfgPath, ref string, dryRun bool) {
 	if err := config.SaveIf(cfgPath, cfg, fp); err != nil {
 		fatal("%v", err)
 	}
-	fmt.Printf("удалено: %s\n", inst.Slug)
+	say("удалено: %s\n", inst.Slug)
 }
 
 func instanceEnable(cfgPath, ref string, on bool) {
@@ -486,7 +494,11 @@ func instanceEnable(cfgPath, ref string, on bool) {
 	if err := config.SaveIf(cfgPath, cfg, fp); err != nil {
 		fatal("%v", err)
 	}
-	fmt.Printf("%s: %v\n", inst.Slug, map[bool]string{true: "включено", false: "выключено"}[on])
+	state := i18n.T("выключено")
+	if on {
+		state = i18n.T("включено")
+	}
+	fmt.Printf("%s: %s\n", inst.Slug, state)
 }
 
 // ---- helpers ----------------------------------------------------------
@@ -526,7 +538,7 @@ func coerce(schema *plugin.Schema, key, value string) any {
 
 func instanceByRef(cfg *config.Config, ref string) *config.PluginInstance {
 	if ref == "" {
-		fatal("which instance? give its id or slug (connector instance list)")
+		fatal("какое подключение? укажите его id или slug (connector instance list)")
 	}
 	for i := range cfg.Plugins {
 		if cfg.Plugins[i].ID == ref || cfg.Plugins[i].Slug == ref {
@@ -541,11 +553,11 @@ func mustID(cfgPath, ref string) string { return instanceByRef(mustLoadLenient(c
 
 func mustLoadLenient(path string) *config.Config {
 	if path == "" {
-		fatal("--config is required")
+		fatal("нужен --config")
 	}
 	cfg, err := config.LoadLenient(path)
 	if err != nil {
-		fatal("config: %v", err)
+		fatal("конфиг: %v", err)
 	}
 	cfg.CompleteInstances()
 	return cfg
@@ -584,23 +596,25 @@ func liveCall(addr, path string, body map[string]any) {
 // liveJSON is liveCall for a caller that reads the answer.
 func liveJSON(addr, path string, body map[string]any, out any) {
 	if err := json.Unmarshal(livePost(addr, path, body), out); err != nil {
-		fatal("connector answered something that is not JSON: %v", err)
+		fatal("коннектор ответил не JSON: %v", err)
 	}
 }
 
 func livePost(addr, path string, body map[string]any) []byte {
 	token := os.Getenv("BUFF_ADMIN_TOKEN")
 	if token == "" {
-		fatal("live checks need the admin token: set BUFF_ADMIN_TOKEN to the one the connector printed")
+		fatal("живым проверкам нужен токен страницы — задайте BUFF_ADMIN_TOKEN тем, что напечатал коннектор")
 	}
 	b, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", "http://"+addr+path, strings.NewReader(string(b)))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Buff-Local", "1")
 	req.Header.Set("X-Buff-Token", token)
+	// The running connector answers in the language this terminal reads.
+	req.Header.Set("Accept-Language", string(i18n.Default()))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fatal("connector is not running on %s: %v", addr, err)
+		fatal("коннектор не работает на %s: %v", addr, err)
 	}
 	defer res.Body.Close()
 	out, _ := io.ReadAll(res.Body)
@@ -613,7 +627,7 @@ func liveGet(addr, path string) {
 	req.Header.Set("X-Buff-Token", token)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fatal("connector is not running on %s: %v", addr, err)
+		fatal("коннектор не работает на %s: %v", addr, err)
 	}
 	defer res.Body.Close()
 	var payload struct {
@@ -636,12 +650,18 @@ func statusSuffix(status, reason string) string {
 
 func orNone(s string) string {
 	if s == "" {
-		return "нет"
+		return i18n.T("нет")
 	}
 	return s
 }
 
+// say prints to the terminal in its language (i18n: the line is the
+// catalogue's key, its English is looked up).
+func say(format string, args ...any) { fmt.Print(i18n.Sprintf(format, args...)) }
+
+// fatal says why and stops. Errors among the arguments are translated too:
+// most were written in Russian deep inside the connector.
 func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	fmt.Fprintln(os.Stderr, i18n.Sprintf(format, args...))
 	os.Exit(1)
 }

@@ -13,7 +13,7 @@ import re
 import secrets
 from datetime import timedelta, timezone
 
-from buff_plugin import moment
+from buff_plugin import english, moment, say
 
 # A Drive id is a run of letters, digits, `-` and `_`. In a link it follows
 # `/folders/`, `/d/` or `/file/d/`, or sits in `?id=` (older sharing links).
@@ -32,6 +32,8 @@ COMMENTABLE = (DOC, SHEET, SLIDES)
 
 KINDS = {DOC: "документ", SHEET: "таблица", SLIDES: "презентация", FOLDER: "папка",
          SHORTCUT: "ярлык", "application/pdf": "PDF"}
+KINDS_EN = {DOC: "document", SHEET: "spreadsheet", SLIDES: "presentation", FOLDER: "folder",
+            SHORTCUT: "shortcut", "application/pdf": "PDF"}
 
 # What a person reads of each Google type, and the export that gives it.
 EXPORT = {DOC: "text/markdown", SLIDES: "text/plain"}
@@ -46,7 +48,7 @@ def bare_id(value) -> str:
     or Slides link."""
     text = str(value or "").strip()
     if not text:
-        raise ValueError("пустая ссылка или идентификатор Google Диска")
+        raise ValueError(say("пустая ссылка или идентификатор Google Диска", "an empty Google Drive link or id"))
     if _BARE.match(text):
         return text
     m = _IN_PATH.search(text)
@@ -57,7 +59,8 @@ def bare_id(value) -> str:
         key, _, val = pair.partition("=")
         if key == "id" and _BARE.match(val):
             return val
-    raise ValueError(f"{text} — не ссылка и не идентификатор Google Диска")
+    raise ValueError(say(f"{text} — не ссылка и не идентификатор Google Диска",
+                         f"{text} is neither a Google Drive link nor an id"))
 
 
 def kind_of(mime: str) -> str:
@@ -65,8 +68,10 @@ def kind_of(mime: str) -> str:
     its top-level MIME family, so «image» and «video» read as such."""
     mime = str(mime or "")
     if mime in KINDS:
-        return KINDS[mime]
+        return KINDS_EN[mime] if english() else KINDS[mime]
     family = mime.split("/")[0]
+    if english():
+        return family if family in ("image", "video", "audio", "text") else "file"
     return {"image": "изображение", "video": "видео", "audio": "аудио", "text": "текст"}.get(family, "файл")
 
 
@@ -146,7 +151,8 @@ def split_key(key: str) -> tuple[str, str]:
     try:
         return bare_id(file_id), comment.strip()
     except ValueError as exc:
-        raise RuntimeError(f"{key} — не адрес файла Google Диска (нужно ФАЙЛ или ФАЙЛ#комментарий)") from exc
+        raise RuntimeError(say(f"{key} — не адрес файла Google Диска (нужно ФАЙЛ или ФАЙЛ#комментарий)",
+                               f"{key} is not a Google Drive file address (FILE or FILE#comment is needed)")) from exc
 
 
 def comment_url(view_link: str, comment: str) -> str:
@@ -161,7 +167,7 @@ def sheet_markdown(title: str, rows: list[list]) -> str:
     """One sheet as a markdown table: the first row is the header. Nothing is
     cut — a sheet of a thousand rows is a thousand rows."""
     if not rows:
-        return f"## {title}\n\n(пусто)\n"
+        return f"## {title}\n\n{say('(пусто)', '(empty)')}\n"
     width = max(len(r) for r in rows)
     cell = lambda v: str(v if v is not None else "").replace("|", "\\|").replace("\n", " ")  # noqa: E731
     pad = lambda r: [cell(v) for v in list(r) + [""] * (width - len(r))]  # noqa: E731

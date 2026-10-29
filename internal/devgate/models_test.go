@@ -85,6 +85,27 @@ func TestModelsCarryTheNameTheBackendGave(t *testing.T) {
 	}
 }
 
+// What a model reads and writes (#27) rides through as the backend said it, so Buff Code
+// sends a picture only to a model that sees it. A model the backend said nothing about
+// carries nothing — Buff Code then keeps text only.
+func TestModelsCarryWhatTheyReadAndWrite(t *testing.T) {
+	l := &streamLink{fakeLink: fakeLink{reply: map[string]any{"ok": true, "models": []any{"buff", "other"},
+		"modalities": map[string]any{"buff": map[string]any{"input": []any{"text", "image"}, "output": []any{"text"}}}}}}
+	w := call(Handler(l), http.MethodGet, "/v1/models", "", dev)
+	var got struct {
+		Data []map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	in, _ := got.Data[0]["input_modalities"].([]any)
+	out, _ := got.Data[0]["output_modalities"].([]any)
+	if len(in) != 2 || in[1] != "image" || len(out) != 1 || out[0] != "text" {
+		t.Fatalf("%s", w.Body)
+	}
+	if _, said := got.Data[1]["input_modalities"]; said {
+		t.Fatalf("an unknown model got modalities: %s", w.Body)
+	}
+}
+
 func TestAChatCallStreamsTheProvidersAnswerAsIs(t *testing.T) {
 	l := &streamLink{pieces: []string{
 		`{"status":200,"content_type":"text/event-stream"}` + "\n",

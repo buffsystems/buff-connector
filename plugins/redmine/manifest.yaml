@@ -1,5 +1,5 @@
 name: redmine
-version: 1.1.0
+version: 1.1.2
 host_api: 1
 publisher: buff
 summary: Redmine — вопросы и ответы прямо в задачах трекера

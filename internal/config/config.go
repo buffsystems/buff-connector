@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/buffsystems/buff-connector/internal/problem"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -133,13 +134,13 @@ func (c *Config) UnknownSections() []string {
 func Load(path string) (*Config, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read config: %w", err)
+		return nil, fmt.Errorf("чтение конфига: %w", err)
 	}
 	var cfg Config
 	dec := yaml.NewDecoder(strings.NewReader(string(raw)))
 	dec.KnownFields(true)
 	if err := dec.Decode(&cfg); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
+		return nil, fmt.Errorf("разбор конфига: %w", err)
 	}
 	// The relay is baked into the build — the operator only sets it to override a
 	// self-hosted deployment. Absent → use the built-in default.
@@ -188,11 +189,11 @@ func LoadLenient(path string) (*Config, error) {
 		if os.IsNotExist(err) {
 			return &Config{}, nil
 		}
-		return nil, fmt.Errorf("read config: %w", err)
+		return nil, fmt.Errorf("чтение конфига: %w", err)
 	}
 	var cfg Config
 	if err := yaml.Unmarshal(raw, &cfg); err != nil {
-		return nil, fmt.Errorf("parse config: %w", err)
+		return nil, fmt.Errorf("разбор конфига: %w", err)
 	}
 	return &cfg, nil
 }
@@ -203,19 +204,19 @@ func LoadLenient(path string) (*Config, error) {
 // being stored and silently ignored.
 func (c *Config) Validate() error {
 	if c.MiddlewareURL == "" {
-		return fmt.Errorf("middleware_url is required")
+		return fmt.Errorf("нужен middleware_url")
 	}
 	u, err := url.Parse(c.MiddlewareURL)
 	if err != nil || u.Scheme == "" {
-		return fmt.Errorf("middleware_url is not a valid URL: %q", c.MiddlewareURL)
+		return fmt.Errorf("middleware_url — не адрес: %q", c.MiddlewareURL)
 	}
 	switch u.Scheme {
 	case "ws", "wss", "nats":
 	default:
-		return fmt.Errorf("middleware_url scheme must be ws/wss/nats, got %q", u.Scheme)
+		return fmt.Errorf("схема middleware_url — ws, wss или nats, а не %q", u.Scheme)
 	}
 	if c.StateDir == "" {
-		return fmt.Errorf("state_dir is required")
+		return fmt.Errorf("нужен state_dir")
 	}
 	// A connector with nothing configured is legitimate, not an error. It is the
 	// state every connector starts in: an operator pairs first and configures
@@ -224,12 +225,12 @@ func (c *Config) Validate() error {
 	// anything to pair FOR. The agent says so at startup instead.
 	for i := range c.Providers {
 		if err := c.Providers[i].validate(); err != nil {
-			return fmt.Errorf("provider[%d]: %w", i, err)
+			return fmt.Errorf("провайдер[%d]: %w", i, err)
 		}
 	}
 	for i := range c.Plugins {
 		if err := c.Plugins[i].validate(); err != nil {
-			return fmt.Errorf("plugins[%d]: %w", i, err)
+			return fmt.Errorf("плагин[%d]: %w", i, err)
 		}
 	}
 	return nil
@@ -237,16 +238,16 @@ func (c *Config) Validate() error {
 
 func (p *Provider) validate() error {
 	if !knownKinds[p.Kind] {
-		return fmt.Errorf("unknown provider kind %q", p.Kind)
+		return fmt.Errorf("неизвестный вид провайдера %q", p.Kind)
 	}
 	if p.BaseURL == "" {
-		return fmt.Errorf("base_url is required")
+		return fmt.Errorf("нужен base_url")
 	}
 	if u, err := url.Parse(p.BaseURL); err != nil || u.Scheme == "" || u.Host == "" {
-		return fmt.Errorf("base_url is not a valid URL: %q", p.BaseURL)
+		return fmt.Errorf("base_url — не адрес: %q", p.BaseURL)
 	}
 	if len(p.Repos) == 0 {
-		return fmt.Errorf("at least one repo is required in the allowlist")
+		return fmt.Errorf("в списке нужен хотя бы один репозиторий")
 	}
 	return exactlyOneSecretRef("token", p.TokenEnv, p.TokenFile)
 }
@@ -256,13 +257,13 @@ func (c *Config) resolveTokens() error {
 		p := &c.Providers[i]
 		token, err := resolveSecret("token", p.TokenEnv, p.TokenFile)
 		if err != nil {
-			return fmt.Errorf("provider[%d]: %w", i, err)
+			return fmt.Errorf("провайдер[%d]: %w", i, err)
 		}
 		p.Token = token
 	}
 	for i := range c.Plugins {
 		if err := c.Plugins[i].ResolveSecrets(); err != nil {
-			return fmt.Errorf("plugins[%d]: %w", i, err)
+			return fmt.Errorf("плагин[%d]: %w", i, err)
 		}
 	}
 	return nil
@@ -275,21 +276,18 @@ func (c *Config) resolveTokens() error {
 // connector down. It used to be: a duplicate slug failed the config load, which
 // stopped the git bridge as well, for a fault in something git knows nothing
 // about. The offending instance is refused instead, and the rest carry on.
-func (c *Config) InstanceProblems() map[string]string {
-	problems := map[string]string{}
+func (c *Config) InstanceProblems() map[string]error {
+	problems := map[string]error{}
 	seenID := map[string]int{}
 	seenSlug := map[string]int{}
 	for i := range c.Plugins {
 		p := &c.Plugins[i]
 		if first, dup := seenID[p.ID]; dup {
-			problems[p.ID] = fmt.Sprintf("id %s is already used by the connection at position %d",
-				p.ID, first+1)
+			problems[p.ID] = problem.New("instance_id_taken", p.ID, first+1)
 			continue
 		}
 		if first, dup := seenSlug[p.Slug]; dup {
-			problems[p.ID] = fmt.Sprintf("slug %q is already used by %q — two connections cannot "+
-				"offer tools under the same name; rename one of them",
-				p.Slug, c.Plugins[first].Alias)
+			problems[p.ID] = problem.New("instance_slug_taken", p.Slug, c.Plugins[first].Alias)
 			continue
 		}
 		seenID[p.ID], seenSlug[p.Slug] = i, i

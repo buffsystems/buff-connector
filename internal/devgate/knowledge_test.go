@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/buffsystems/buff-connector/internal/i18n"
 )
 
 // knowLink answers the knowledge commands like the backend does (#371) and keeps what it was asked.
@@ -307,10 +309,13 @@ func answer(t *testing.T, url, session string, id any, result string) {
 func TestKnowledgeToolsSayWhatAndWhenWithinCodeModesFirstLine(t *testing.T) {
 	// Code Mode lists a tool by the first line of its description, cut at 120 characters: the
 	// trigger has to be there, or the model never sees when to call (#371, measured 0/5 before).
-	for _, tool := range knowledgeTools {
-		first, _, _ := strings.Cut(tool.Description, "\n")
-		if n := len([]rune(first)); n > 120 || !strings.Contains(strings.ToLower(first), "вызывай") {
-			t.Fatalf("%s: first line must hold the trigger within 120 chars (%d): %q", tool.Name, n, first)
+	// In either language the model works in.
+	for l, trigger := range map[i18n.Lang]string{i18n.RU: "вызывай", i18n.EN: "call"} {
+		for _, tool := range knowledgeTools.in(l) {
+			first, _, _ := strings.Cut(tool.Description, "\n")
+			if n := len([]rune(first)); n > 120 || !strings.Contains(strings.ToLower(first), trigger) {
+				t.Fatalf("%s %s: first line must hold the trigger within 120 chars (%d): %q", l, tool.Name, n, first)
+			}
 		}
 	}
 }

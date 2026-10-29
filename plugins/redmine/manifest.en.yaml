@@ -1,0 +1,38 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: Redmine — questions and answers right in tracker issues
+tools:
+  search_issues: >-
+    Find issues by text — when a number is mentioned or context from the tracker is
+    needed
+  get_issue: >-
+    Read an issue with its discussion — when requirements or the course of a discussion
+    are needed
+  add_comment: Write a comment in an issue
+config_schema:
+  base_url:
+    title: Redmine address
+    description: The server's root, for example https://redmine.corp.local
+  projects:
+    title: Projects
+    description: >-
+      Ids of the projects in which the bot answers requests — and only in them does it
+      write. It is what stands in the project's address, for example catalog.
+  text_formatting:
+    title: Text formatting
+    description: >-
+      How your Redmine formats text — “Administration → Settings → General → Text
+      formatting”. markdown — Markdown and CommonMark (the default in Redmine 5 and
+      newer), textile — Textile. The bot writes its answer and link in the same
+      formatting.
+  mention_alias:
+    title: Other name the bot answers to
+    description: An extra name besides the account, for example buff
+  accept_assignment:
+    title: Take on issues assigned to the bot
+    description: >-
+      By default the bot takes on work only when addressed directly — a mention or a
+      command in a comment. Assigning an issue to its account is addressed to it too,
+      but also happens through routing rules when nobody meant to order any work. Turn
+      it on if assignment is a deliberate act by a person in your team.

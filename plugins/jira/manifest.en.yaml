@@ -1,0 +1,36 @@
+# English for the text of manifest.yaml a person reads (autonomous-dev/cloud-front#718):
+# the catalogue card, the marketplace and the settings form. What the model is told
+# about the tools is in tools.ru.md and tools.en.md.
+summary: >-
+  Jira Data Center and Server — tasks, questions and answers right in tickets
+tools:
+  search_issues: >-
+    Find tickets by JQL — when a key is mentioned in the task or context from the
+    tracker is needed
+  get_issue: >-
+    Read a whole ticket with its comments — when the text of the requirements or the
+    discussion is needed
+  add_comment: Write a comment in a ticket
+config_schema:
+  base_url:
+    title: Jira address
+    description: >-
+      The Jira root together with the context path, for example
+      https://jira.corp.local/jira
+  project_keys:
+    title: Project keys
+    description: In these projects the bot answers requests
+  mention_alias:
+    title: Name the bot answers to
+    description: An extra name besides the account, for example buff
+  accept_assignment:
+    title: Take on tickets assigned to the bot
+    description: >-
+      By default the bot takes on work only when addressed directly — a mention in a
+      comment. Assigning a ticket to its account is addressed to it too, but also
+      happens through routing rules when nobody meant to order any work. Turn it on if
+      assignment is a deliberate act by a person in your team.
+  username:
+    title: Login
+    description: >-
+      Needed only for old Jira Server versions that have no personal access tokens yet

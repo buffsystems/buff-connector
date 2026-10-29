@@ -16,6 +16,33 @@
           if (dark) document.documentElement.classList.add("dark");
         } catch (e) {}
       })();
+      // The language, the same contract as the apps (@buff/ui's useLanguage): the 'language'
+      // key, ru | en | system, system by default — the browser's languages in order, the
+      // first Russian or English wins, else Russian. The cookie tells the server, so the
+      // texts it sends (errors, check results) come in the same language.
+      (function () {
+        var choice = "system";
+        try {
+          var v = localStorage.getItem("language");
+          if (v === "ru" || v === "en" || v === "system") choice = v;
+        } catch (e) {
+          // No storage (a locked-down browser): the switch left its choice in the cookie.
+          var kept = document.cookie.match(/(?:^|; )buff_lang=(ru|en)/);
+          if (kept) choice = kept[1];
+        }
+        var lang = choice;
+        if (choice === "system") {
+          lang = "ru";
+          var tags = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+          for (var i = 0; i < tags.length; i++) {
+            var base = String(tags[i] || "").toLowerCase().split(/[-_]/)[0];
+            if (base === "ru" || base === "en") { lang = base; break; }
+          }
+        }
+        document.documentElement.lang = lang;
+        document.documentElement.dataset.languageChoice = choice;
+        document.cookie = "buff_lang=" + lang + "; path=/; SameSite=Strict";
+      })();
     </script>
     <!-- The Buff design system's plain CSS (#561): fonts, tokens for both themes, document
          defaults and the composite ui-* classes, embedded in the binary and served at /ui/.
@@ -80,14 +107,14 @@
       main { min-width: 0; padding: 2.1rem 2rem 4rem; }
 
       /* The page header: the design system's, kept a row on a phone too — its only
-         action is the 28px theme switch, which belongs beside the title, not under it. */
+         actions are the 28px language and theme switches, which belong beside the title, not under it. */
       .page-head { flex-direction: row; align-items: flex-start; }
       .page-head .ui-page-header__main { flex: 1; }
       .page-head .ui-page-header__actions > * { flex: none; }
 
-      /* The theme switch's menu drops from its trigger (the apps draw it in a portal). */
-      .theme { position: relative; }
-      .theme .ui-menu { position: absolute; top: calc(100% + 0.25rem); right: 0; min-width: 10rem; }
+      /* The theme and language switches' menus drop from their triggers (the apps draw them in a portal). */
+      .menu-anchor { position: relative; }
+      .menu-anchor .ui-menu { position: absolute; top: calc(100% + 0.25rem); right: 0; min-width: 10rem; }
       .ui-menu__item { cursor: pointer; }
       .ui-menu__item[aria-checked="false"] .ui-menu__check { visibility: hidden; }
       /* The trigger shows the mode actually painted. */
@@ -208,7 +235,26 @@
             <h1 class="ui-page-header__title" id="title">Обзор</h1>
             <p class="ui-page-header__subtitle" id="lede"></p>
           </div>
-          <div class="ui-page-header__actions theme">
+          <div class="ui-page-header__actions">
+            <div class="menu-anchor">
+            <button type="button" id="langButton" class="ui-btn ui-btn--icon ui-btn--ghost ui-btn--xs"
+                    aria-label="Язык" title="Язык"
+                    aria-haspopup="menu" aria-expanded="false" aria-controls="langMenu">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 8 6 6" /><path d="m4 14 6-6 2-3" /><path d="M2 5h12" /><path d="M7 2h1" /><path d="m22 22-5-10-5 10" /><path d="M14 18h6" /></svg>
+            </button>
+            <div class="ui-menu" id="langMenu" role="menu" aria-label="Язык" hidden>
+              <div class="ui-menu__item" role="menuitemradio" tabindex="-1" aria-checked="false" data-lang-value="ru">
+                <span class="ui-menu__text" lang="ru">Русский</span><svg class="ui-menu__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+              </div>
+              <div class="ui-menu__item" role="menuitemradio" tabindex="-1" aria-checked="false" data-lang-value="en">
+                <span class="ui-menu__text" lang="en">English</span><svg class="ui-menu__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+              </div>
+              <div class="ui-menu__item" role="menuitemradio" tabindex="-1" aria-checked="false" data-lang-value="system">
+                <span class="ui-menu__text">Как в системе</span><svg class="ui-menu__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+              </div>
+            </div>
+            </div>
+            <div class="menu-anchor theme">
             <button type="button" id="themeButton" class="ui-btn ui-btn--icon ui-btn--ghost ui-btn--xs"
                     aria-label="Переключить тему" title="Переключить тему"
                     aria-haspopup="menu" aria-expanded="false" aria-controls="themeMenu">
@@ -225,6 +271,7 @@
               <div class="ui-menu__item" role="menuitemradio" tabindex="-1" aria-checked="false" data-theme-value="system">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="14" x="2" y="3" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></svg><span class="ui-menu__text">Системная</span><svg class="ui-menu__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
               </div>
+            </div>
             </div>
           </div>
         </header>
@@ -444,9 +491,42 @@
         <button type="button" class="ui-btn ui-btn--primary ui-btn--md" onclick="notesRiskAnswer(true)">Понимаю риск, снять</button>
       </div>
     </dialog>
+    <!-- i18n:en -->
     <script>
       const $ = (id) => document.getElementById(id);
       let st = { middleware_url: "", state_dir: "", providers: [] };
+
+      // ---- language -------------------------------------------------------
+      // The page is written in Russian; English is the connector's catalogue for this page
+      // (page.en.json), keyed by the Russian text and put into the page by the server.
+      // t() is every line the script writes; translatePage() swaps the static markup once.
+      const LANG = document.documentElement.lang === "en" ? "en" : "ru";
+      const EN = (() => {
+        try { return JSON.parse($("i18n-en").textContent); } catch { return {}; }
+      })();
+      function t(ru, ...args) {
+        const line = LANG === "en" && EN[ru] != null ? EN[ru] : ru;
+        return line.replace(/\{(\d+)\}/g, (m, i) => (i < args.length ? args[i] : m));
+      }
+      const normText = (s) => s.replace(/\s+/g, " ").trim();
+      function translatePage() {
+        if (LANG !== "en") return;
+        const walker = document.createTreeWalker(document.documentElement, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          const parent = n.parentElement;
+          // A language named in itself (the switch's «Русский») keeps its own words.
+          const own = parent && parent.closest("[lang]");
+          if (!parent || parent.closest("script,style") || (own && own !== document.documentElement)) continue;
+          const key = normText(n.nodeValue);
+          if (!key || EN[key] == null) continue;
+          n.nodeValue = n.nodeValue.match(/^\s*/)[0] + EN[key] + n.nodeValue.match(/\s*$/)[0];
+        }
+        for (const el of document.querySelectorAll("[placeholder],[title],[aria-label],[data-tip]"))
+          for (const a of ["placeholder", "title", "aria-label", "data-tip"]) {
+            const v = el.getAttribute(a);
+            if (v && EN[normText(v)] != null) el.setAttribute(a, EN[normText(v)]);
+          }
+      }
 
       // Every save carries the fingerprint the page loaded with, so a save is
       // refused rather than overwriting an edit made meanwhile from the CLI or
@@ -469,13 +549,13 @@
       // that matters on a screen share — send a colleague a link to the exact
       // thing they are looking at.
       const SECTIONS = {
-        overview: { title: "Обзор", lede: "Что коннектор делает прямо сейчас и чего ему не хватает." },
-        link: { title: "Подключение", lede: "Адрес relay, каталог состояния и одноразовый код привязки. Ключ коннектора остаётся на этой машине." },
-        repos: { title: "Репозитории", lede: "Провайдеры git, к которым коннектор ходит изнутри вашей сети. Токен не покидает эту машину." },
-        market: { title: "Каталог", lede: "Подписанные нами интеграции. Что интеграция получит — видно до установки, а не после." },
-        plugins: { title: "Интеграции", lede: "Подключение — отдельный процесс под собственным пользователем ОС: он не видит ни ключа коннектора, ни ваших токенов и ходит только по адресам, которые вы указали." },
-        mcp: { title: "Свои MCP", lede: "Сервер MCP, который вы приносите сами: из архива, из репозитория GitHub или по адресу. Прогоны платформы получат его инструменты так же, как инструменты интеграций из каталога, — но только те, что вы отметите как читающие. Разработчикам в Buff Code доступны все, каждый вызов виден в разделе «Buff Code»." },
-        ide: { title: "Buff Code", lede: "Разработчики вашей организации получают инструменты этих подключений в Buff Code через шлюз коннектора. Здесь видно, кто и сколько их вызывал с запуска коннектора; каждый вызов уходит и в журнал платформы с именем разработчика." },
+        overview: { title: t("Обзор"), lede: t("Что коннектор делает прямо сейчас и чего ему не хватает.") },
+        link: { title: t("Подключение"), lede: t("Адрес relay, каталог состояния и одноразовый код привязки. Ключ коннектора остаётся на этой машине.") },
+        repos: { title: t("Репозитории"), lede: t("Провайдеры git, к которым коннектор ходит изнутри вашей сети. Токен не покидает эту машину.") },
+        market: { title: t("Каталог"), lede: t("Подписанные нами интеграции. Что интеграция получит — видно до установки, а не после.") },
+        plugins: { title: t("Интеграции"), lede: t("Подключение — отдельный процесс под собственным пользователем ОС: он не видит ни ключа коннектора, ни ваших токенов и ходит только по адресам, которые вы указали.") },
+        mcp: { title: t("Свои MCP"), lede: t("Сервер MCP, который вы приносите сами: из архива, из репозитория GitHub или по адресу. Прогоны платформы получат его инструменты так же, как инструменты интеграций из каталога, — но только те, что вы отметите как читающие. Разработчикам в Buff Code доступны все, каждый вызов виден в разделе «Buff Code».") },
+        ide: { title: "Buff Code", lede: t("Разработчики вашей организации получают инструменты этих подключений в Buff Code через шлюз коннектора. Здесь видно, кто и сколько их вызывал с запуска коннектора; каждый вызов уходит и в журнал платформы с именем разработчика.") },
       };
 
       function show(name) {
@@ -511,25 +591,24 @@
 
         const provs = (st.providers || []).length;
         $("ovStats").innerHTML = [
-          stat("Платформа", st.paired ? "Привязан" : "Не привязан", st.paired ? "ok" : "warn",
+          stat(t("Платформа"), st.paired ? t("Привязан") : t("Не привязан"), st.paired ? "ok" : "warn",
             st.middleware_url || ""),
-          stat("Репозитории", String(repos), repos ? "ok" : "",
-            provs ? plural(provs, "провайдер", "провайдера", "провайдеров") : "провайдеров нет"),
-          stat("Подключения", inst.length ? running + " / " + inst.length : "0",
+          stat(t("Репозитории"), String(repos), repos ? "ok" : "",
+            provs ? plural(provs, t("провайдер"), t("провайдера"), t("провайдеров")) : t("провайдеров нет")),
+          stat(t("Подключения"), inst.length ? running + " / " + inst.length : "0",
             inst.length ? (running === inst.length ? "ok" : "bad") : "",
-            !inst.length ? "ни одного не настроено" : running === inst.length ? "все работают" : "часть не запущена"),
-          stat("Инструменты", String(tools), tools ? "ok" : "",
-            tools ? "видны модели на читающих стадиях" : "модель ничего не получает"),
+            !inst.length ? t("ни одного не настроено") : running === inst.length ? t("все работают") : t("часть не запущена")),
+          stat(t("Инструменты"), String(tools), tools ? "ok" : "",
+            tools ? t("видны модели на читающих стадиях") : t("модель ничего не получает")),
         ].join("");
 
         let banner = "";
         if (!st.paired) {
-          banner = callout("warn", `<b>Коннектор ещё не привязан.</b>
-            Пока он не привязан, платформа его не видит и задачи к нему не приходят.
-            <div class="callout-note">Код привязки — в приложении Buff, раздел «Коннекторы».</div>`);
+          banner = callout("warn", `${t("<b>Коннектор ещё не привязан.</b> Пока он не привязан, платформа его не видит и задачи к нему не приходят.")}
+            <div class="callout-note">${t("Код привязки — в приложении Buff, раздел «Коннекторы».")}</div>`);
         } else if (pstate.enabled && !iso.available) {
-          banner = callout("crit", `<b>Интеграции не запускаются.</b> ${esc(iso.reason || "")}
-            <div class="callout-note">Git-мост при этом работает.</div>`);
+          banner = callout("crit", `<b>${t("Интеграции не запускаются.")}</b> ${esc(iso.reason || "")}
+            <div class="callout-note">${t("Git-мост при этом работает.")}</div>`);
         }
         // A section the connector no longer reads is not an error, but the
         // operator has to hear it from the page — otherwise their integration
@@ -538,31 +617,31 @@
         // version is out, where an operator already looks at their connector.
         // Updating it is a download and a restart — their call, not ours.
         if (st.core_latest) {
-          banner += callout("warn", `<b>Вышла новая версия коннектора: ${esc(st.core_latest)}.</b>
-            У вас ${esc(st.version || "")}.
-            <div class="callout-note">Скачать — на странице загрузки; подключения и настройки останутся на месте.</div>`);
+          banner += callout("warn", `<b>${t("Вышла новая версия коннектора: {0}.", esc(st.core_latest))}</b>
+            ${t("У вас {0}.", esc(st.version || ""))}
+            <div class="callout-note">${t("Скачать — на странице загрузки; подключения и настройки останутся на месте.")}</div>`);
         }
         banner += (st.ignored || []).map((sec) =>
-          callout("warn", `<b>Раздел <code>${esc(sec.name)}</code> в файле настроек не используется.</b>
+          callout("warn", `<b>${t("Раздел <code>{0}</code> в файле настроек не используется.", esc(sec.name))}</b>
             ${esc(sec.note)}`)).join("");
         $("ovBanner").innerHTML = banner;
 
         const next = [];
         if (!(st.providers || []).length)
-          next.push(`Добавьте провайдера в разделе <a class="ui-link" href="#/repos">Репозитории</a> — коннектору нужен доступ к вашему git.`);
+          next.push(t("Добавьте провайдера в разделе <a class=\"ui-link\" href=\"#/repos\">Репозитории</a> — коннектору нужен доступ к вашему git."));
         if (!st.paired)
-          next.push(`Вставьте код привязки в разделе <a class="ui-link" href="#/link">Подключение</a>.`);
+          next.push(t("Вставьте код привязки в разделе <a class=\"ui-link\" href=\"#/link\">Подключение</a>."));
         if (pstate.enabled && !inst.length)
-          next.push(`Выберите интеграцию в <a class="ui-link" href="#/market">Каталоге</a>, чтобы модель получила инструменты вашей системы.`);
+          next.push(t("Выберите интеграцию в <a class=\"ui-link\" href=\"#/market\">Каталоге</a>, чтобы модель получила инструменты вашей системы."));
         if (inst.some((i) => i.status !== "running"))
-          next.push(`Разберитесь с подключением, которое не запустилось — раздел <a class="ui-link" href="#/plugins">Интеграции</a>.`);
+          next.push(t("Разберитесь с подключением, которое не запустилось — раздел <a class=\"ui-link\" href=\"#/plugins\">Интеграции</a>."));
         $("ovNext").innerHTML = next.length
           ? next.map((s) => `<li>${s}</li>`).join("")
-          : `<li>Всё на месте: коннектор привязан, репозитории заданы, подключения работают.</li>`;
+          : `<li>${t("Всё на месте: коннектор привязан, репозитории заданы, подключения работают.")}</li>`;
 
         $("pairHint").innerHTML = st.paired
-          ? `Коннектор привязан к платформе. Повторная привязка нужна, только если вы перенесли его на другую машину — новый код выдаёт приложение Buff.`
-          : `Сначала сохраните хотя бы одного провайдера или интеграцию. Затем вставьте одноразовый код из приложения Buff.`;
+          ? t("Коннектор привязан к платформе. Повторная привязка нужна, только если вы перенесли его на другую машину — новый код выдаёт приложение Buff.")
+          : t("Сначала сохраните хотя бы одного провайдера или интеграцию. Затем вставьте одноразовый код из приложения Buff.");
 
         badge("repos", repos ? String(repos) : "");
         badge("link", st.paired ? "" : "!");
@@ -570,10 +649,12 @@
       }
 
       // Russian counts three ways, and "0 провайдер(ов)" on a security product
-      // reads as a page nobody finished.
+      // reads as a page nobody finished. English counts two: one, and the rest
+      // (the forms come in already translated, few and many alike).
       function plural(n, one, few, many) {
-        const t = n % 100 > 4 && n % 100 < 21 ? many : [many, one, few, few, few][Math.min(n % 10, 4)] || many;
-        return n + " " + t;
+        if (LANG === "en") return n + " " + (n === 1 ? one : many);
+        const form = n % 100 > 4 && n % 100 < 21 ? many : [many, one, few, few, few][Math.min(n % 10, 4)] || many;
+        return n + " " + form;
       }
 
       function stat(k, v, tone, s) {
@@ -619,16 +700,16 @@
           sel.addRange(range);
           document.execCommand("copy");
         }
-        $(okId).textContent = "скопировано ✓";
+        $(okId).textContent = t("скопировано ✓");
       }
 
       async function saveLink() {
         const el = $("lstatus");
-        el.textContent = "сохраняем…"; el.className = "ui-note";
+        el.textContent = t("сохраняем…"); el.className = "ui-note";
         const r = await persist(null);
         if (!r.ok) { el.textContent = r.error; el.className = "err"; return; }
-        el.textContent = "сохранено ✓"; el.className = "ok";
-        $("hstatus").textContent = "сохранено ✓"; $("hstatus").className = "ok";
+        el.textContent = t("сохранено ✓"); el.className = "ok";
+        $("hstatus").textContent = t("сохранено ✓"); $("hstatus").className = "ok";
         await load();
         await loadPlugins();
       }
@@ -645,7 +726,7 @@
         $("nav-mcp").hidden = !pstate.enabled;
         if (!pstate.enabled) { renderOverview(); return; }
         $("catalogSource").innerHTML = pstate.catalog_url
-          ? `<span title="${esc(pstate.catalog_url)}">Каталог и каждая интеграция в нём подписаны нами; подпись проверяется здесь, на вашей машине, до установки.</span>`
+          ? `<span title="${esc(pstate.catalog_url)}">${t("Каталог и каждая интеграция в нём подписаны нами; подпись проверяется здесь, на вашей машине, до установки.")}</span>`
           : "";
         renderIsolation();
         renderInstalled();
@@ -660,15 +741,11 @@
         const iso = pstate.isolation || {};
         let html = "";
         if (!iso.available) {
-          html += callout("crit", `<b>Интеграции не будут запущены.</b> ${esc(iso.reason || "")}
-            <div class="callout-note">Изоляция интеграции требует привилегий: коннектор должен запускаться от root
-            или с CAP_SETUID. Git-мост при этом продолжает работать.</div>`);
+          html += callout("crit", `<b>${t("Интеграции не будут запущены.")}</b> ${esc(iso.reason || "")}
+            <div class="callout-note">${t("Изоляция интеграции требует привилегий: коннектор должен запускаться от root или с CAP_SETUID. Git-мост при этом продолжает работать.")}</div>`);
         }
         if (pstate.runtime && !pstate.runtime.installed) {
-          html += callout("warn", `<b>Интеграции не на чем запускать.</b> На этой машине нет
-            Python 3.11 или новее. Поставьте его пакетным менеджером — или разверните среду рядом с
-            состоянием коннектора; порядок описан в документации, раздел «Коннектор → Установка».
-            Git-мост при этом продолжает работать.`);
+          html += callout("warn", t("<b>Интеграции не на чем запускать.</b> На этой машине нет Python 3.11 или новее. Поставьте его пакетным менеджером — или разверните среду рядом с состоянием коннектора; порядок описан в документации, раздел «Коннектор → Установка». Git-мост при этом продолжает работать."));
         }
         el.innerHTML = html;
       }
@@ -678,11 +755,11 @@
       async function loadCatalog() {
         const r = await api("/api/catalog");
         const el = $("catalogState");
-        if (!r.available) { el.textContent = r.error || "Каталог недоступен."; $("catalog").innerHTML = ""; return; }
+        if (!r.available) { el.textContent = r.error || t("Каталог недоступен."); $("catalog").innerHTML = ""; return; }
         catalogIndex = r.index;
         badge("market", String(((r.index || {}).plugins || []).length));
         el.innerHTML = r.live
-          ? `<span class="ok">Каталог получен.</span>`
+          ? `<span class="ok">${t("Каталог получен.")}</span>`
           : `<span class="err">${esc(r.error || "")}</span>`;
         renderCatalog();
       }
@@ -690,77 +767,77 @@
       function renderCatalog() {
         const el = $("catalog");
         const plugins = (catalogIndex && catalogIndex.plugins) || [];
-        if (!plugins.length) { el.innerHTML = '<div class="ui-empty ui-empty--inline">В каталоге пока пусто.</div>'; return; }
+        if (!plugins.length) { el.innerHTML = `<div class="ui-empty ui-empty--inline">${t("В каталоге пока пусто.")}</div>`; return; }
         el.innerHTML = plugins.map((p) => {
           const vs = p.versions || [];
           const v = vs[0] || {};
-          const tools = (v.tools || []).map((t) =>
-            `<span class="ui-badge ui-badge--sm ui-badge--${t.read_only ? "ok" : "neutral"} tool-name" title="${esc(t.summary)}${t.vision ? " Отвечает картинкой: отдаётся только модели, которая видит изображения." : ""}">${esc(t.name)}${t.read_only ? " ·только чтение" : ""}${t.vision ? " ·картинка" : ""}</span>`).join("");
+          const tools = (v.tools || []).map((tool) =>
+            `<span class="ui-badge ui-badge--sm ui-badge--${tool.read_only ? "ok" : "neutral"} tool-name" title="${esc(tool.summary)}${tool.vision ? " " + t("Отвечает картинкой: отдаётся только модели, которая видит изображения.") : ""}">${esc(tool.name)}${tool.read_only ? " ·" + t("только чтение") : ""}${tool.vision ? " ·" + t("картинка") : ""}</span>`).join("");
           const isInstalled = (pstate.installed || []).some((i) => i.name === p.name && i.version === v.version);
           return `<div class="ui-card" data-item>
             <div class="ui-card__header">
               <h3 class="ui-card__title title-row">${esc(p.name)} ${pill("neutral", esc(v.version || ""))}
                 ${v.status ? pill("warn", esc(v.status)) : ""}</h3>
-              <p class="ui-card__description">${esc(p.summary || "")} · издатель ${esc(p.publisher || "")}${p.category ? " · " + esc(p.category) : ""}</p>
+              <p class="ui-card__description">${esc(p.summary || "")} · ${t("издатель {0}", esc(p.publisher || ""))}${p.category ? " · " + esc(p.category) : ""}</p>
             </div>
             <div class="ui-card__content stack">
             <div class="tools">${tools}</div>
             <div class="ui-callout ui-callout--info"><div class="ui-callout__text">
-              При установке интеграция получит:
+              ${t("При установке интеграция получит:")}
               <ul class="bullets">
-                <li>доступ наружу — ${v.web
-                  ? `<b>в публичный интернет</b> по адресам, которые называет модель, в пределах ваших белого и чёрного списков; внутренняя сеть закрыта всегда${(v.egress_from || []).length ? `; плюс <span title="поля настройки: ${esc(v.egress_from.join(", "))}">адреса из настройки подключения</span>` : ""}`
+                <li>${t("доступ наружу —")} ${v.web
+                  ? `${t("<b>в публичный интернет</b> по адресам, которые называет модель, в пределах ваших белого и чёрного списков; внутренняя сеть закрыта всегда")}${(v.egress_from || []).length ? `; ${t("плюс")} <span title="${t("поля настройки: {0}", esc(v.egress_from.join(", ")))}">${t("адреса из настройки подключения")}</span>` : ""}`
                   : (v.egress_from || []).length
-                    ? `<span title="поля настройки: ${esc(v.egress_from.join(", "))}">только к адресам, которые вы укажете в настройке подключения</span>`
-                    : "<b>нет</b>"}</li>
-                <li>учётные данные — ${(v.credentials || []).length
-                  ? `<span title="${esc(v.credentials.join(", "))}">вводятся при настройке</span>${(v.handed || []).length
+                    ? `<span title="${t("поля настройки: {0}", esc(v.egress_from.join(", ")))}">${t("только к адресам, которые вы укажете в настройке подключения")}</span>`
+                    : `<b>${t("нет")}</b>`}</li>
+                <li>${t("учётные данные —")} ${(v.credentials || []).length
+                  ? `<span title="${esc(v.credentials.join(", "))}">${t("вводятся при настройке")}</span>${(v.handed || []).length
                     ? (v.credentials.length > v.handed.length
-                      ? "; часть из них получает сама интеграция — её протокол коннектор подставить не может, остальные остаются в коннекторе"
-                      : " и передаются самой интеграции — её протокол коннектор подставить не может")
-                    : " и остаются в коннекторе"}`
-                  : "<b>не требуются</b>"}</li>
-                ${(v.network || []).length ? `<li>свои соединения — ${v.network.map((n) => `<b>${esc(n.protocol.toUpperCase())}</b> <span title="поле настройки: ${esc(n.hosts_from)}">к адресам из настройки</span>, порт ${esc((n.ports || []).join(", "))}`).join("; ")} (открывает сама интеграция; коннектор их не ограничивает)</li>` : ""}
-                <li>события от источника — <b>${esc(WEBHOOK_NAMES[v.webhook] || v.webhook || "не принимает")}</b></li>
-                <li>инструменты для модели — <b>${(v.tools || []).length}</b>, из них только для чтения: <b>${(v.tools || []).filter((t) => t.read_only).length}</b></li>
+                      ? t("; часть из них получает сама интеграция — её протокол коннектор подставить не может, остальные остаются в коннекторе")
+                      : t(" и передаются самой интеграции — её протокол коннектор подставить не может"))
+                    : t(" и остаются в коннекторе")}`
+                  : `<b>${t("не требуются")}</b>`}</li>
+                ${(v.network || []).length ? `<li>${t("свои соединения —")} ${v.network.map((n) => `<b>${esc(n.protocol.toUpperCase())}</b> <span title="${t("поле настройки: {0}", esc(n.hosts_from))}">${t("к адресам из настройки")}</span>, ${t("порт {0}", esc((n.ports || []).join(", ")))}`).join("; ")} ${t("(открывает сама интеграция; коннектор их не ограничивает)")}</li>` : ""}
+                <li>${t("события от источника —")} <b>${esc(WEBHOOK_NAMES[v.webhook] || v.webhook || t("не принимает"))}</b></li>
+                <li>${t("инструменты для модели — <b>{0}</b>, из них только для чтения: <b>{1}</b>", (v.tools || []).length, (v.tools || []).filter((tool) => tool.read_only).length)}</li>
               </ul>
             </div></div>
             </div>
             <div class="ui-card__footer actions actions--end">
               ${isInstalled
-                ? pill("ok", "установлен")
-                : `<button class="ui-btn ui-btn--primary ui-btn--md" onclick="installPlugin('${esc(p.name)}','${esc(v.version)}')">Установить</button>`}
+                ? pill("ok", t("установлен"))
+                : `<button class="ui-btn ui-btn--primary ui-btn--md" onclick="installPlugin('${esc(p.name)}','${esc(v.version)}')">${t("Установить")}</button>`}
             </div>
           </div>`;
         }).join("");
       }
 
       async function installPlugin(name, version) {
-        $("catalogState").innerHTML = "Установка " + esc(name) + " " + esc(version) + "…";
+        $("catalogState").innerHTML = t("Установка {0} {1}…", esc(name), esc(version));
         const r = await api("/api/plugins/install", { name, version });
         if (!r.ok) { $("catalogState").innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
-        $("catalogState").innerHTML = `<span class="ok">Установлен ${esc(r.name)} ${esc(r.version)} (${esc(r.digest)}).</span>
-          Код лежит на машине, но ещё ни к чему не подключён — <a class="ui-link" href="#/plugins">добавьте подключение</a>.`;
+        $("catalogState").innerHTML = `<span class="ok">${t("Установлен {0} {1} ({2}).", esc(r.name), esc(r.version), esc(r.digest))}</span>
+          ${t("Код лежит на машине, но ещё ни к чему не подключён — <a class=\"ui-link\" href=\"#/plugins\">добавьте подключение</a>.")}`;
         await loadPlugins();
       }
 
       function renderInstalled() {
         const el = $("installed");
         const list = pstate.installed || [];
-        if (!list.length) { el.innerHTML = '<div class="ui-empty ui-empty--inline">Пока ничего не установлено.</div>'; return; }
+        if (!list.length) { el.innerHTML = `<div class="ui-empty ui-empty--inline">${t("Пока ничего не установлено.")}</div>`; return; }
         el.innerHTML = list.map((p) => `<div class="ui-card" data-item>
           <div class="ui-card__header">
             <h3 class="ui-card__title title-row">${esc(p.name)} ${pill("neutral", esc(p.version))}</h3>
-            <p class="ui-card__description" title="подпись ${esc(p.digest)} · host API ${p.host_api}">${esc(p.summary || "")}</p>
+            <p class="ui-card__description" title="${t("подпись {0}", esc(p.digest))} · host API ${p.host_api}">${esc(p.summary || "")}</p>
           </div>
-          <div class="ui-card__footer actions actions--end"><button class="ui-btn ui-btn--outline ui-btn--sm" onclick="newInstance('${esc(p.name)}','${esc(p.version)}')">Добавить подключение</button></div>
+          <div class="ui-card__footer actions actions--end"><button class="ui-btn ui-btn--outline ui-btn--sm" onclick="newInstance('${esc(p.name)}','${esc(p.version)}')">${t("Добавить подключение")}</button></div>
         </div>`).join("");
       }
 
       function renderInstances() {
         const el = $("instances");
         const list = pstate.instances || [];
-        if (!list.length) { el.innerHTML = '<div class="ui-empty ui-empty--inline">Пока нет подключений.</div>'; return; }
+        if (!list.length) { el.innerHTML = `<div class="ui-empty ui-empty--inline">${t("Пока нет подключений.")}</div>`; return; }
         el.innerHTML = list.map((i) => instanceCard(i, "")).join("");
       }
 
@@ -774,34 +851,34 @@
         const ro = i.read_only_tools || [];
         const hint = i.read_only_hint || [];
         const vision = i.vision_tools || [];
-        const tools = (i.tools || []).map((t) => i.custom
-          ? `<label class="ui-badge ui-badge--${ro.includes(t) ? "ok" : "neutral"} tool-mark"><input type="checkbox" class="ui-checkbox" data-mark="${esc(i.id)}${suffix}" value="${esc(t)}" ${ro.includes(t) ? "checked" : ""} /><span class="tool-name">${esc(t)}</span>${hint.includes(t) ? `<span class="ui-hint" title="Сервер объявляет этот инструмент только читающим. Это его слова, а не проверенный факт.">сервер: чтение</span>` : ""}</label>`
-          : `<span class="ui-badge ui-badge--sm ui-badge--${ro.includes(t) ? "ok" : "neutral"} tool-name"${vision.includes(t) ? ' title="Отвечает картинкой: отдаётся только модели, которая видит изображения."' : ""}>${esc(t)}${vision.includes(t) ? " ·картинка" : ""}</span>`).join("");
+        const tools = (i.tools || []).map((tool) => i.custom
+          ? `<label class="ui-badge ui-badge--${ro.includes(tool) ? "ok" : "neutral"} tool-mark"><input type="checkbox" class="ui-checkbox" data-mark="${esc(i.id)}${suffix}" value="${esc(tool)}" ${ro.includes(tool) ? "checked" : ""} /><span class="tool-name">${esc(tool)}</span>${hint.includes(tool) ? `<span class="ui-hint" title="${t("Сервер объявляет этот инструмент только читающим. Это его слова, а не проверенный факт.")}">${t("сервер: чтение")}</span>` : ""}</label>`
+          : `<span class="ui-badge ui-badge--sm ui-badge--${ro.includes(tool) ? "ok" : "neutral"} tool-name"${vision.includes(tool) ? ` title="${t("Отвечает картинкой: отдаётся только модели, которая видит изображения.")}"` : ""}>${esc(tool)}${vision.includes(tool) ? " ·" + t("картинка") : ""}</span>`).join("");
         const custom = i.custom
-          ? `<span class="ui-badge ui-badge--sm ui-badge--warn tip" tabindex="0" data-tip="Сервер, который вы принесли сами: его код не проверялся, обращения в сеть не ограничиваются. Прогоны платформы получают только инструменты, отмеченные здесь как читающие; разработчики в Buff Code — все, с записью в журнал.">пользовательское</span>`
+          ? `<span class="ui-badge ui-badge--sm ui-badge--warn tip" tabindex="0" data-tip="${t("Сервер, который вы принесли сами: его код не проверялся, обращения в сеть не ограничиваются. Прогоны платформы получают только инструменты, отмеченные здесь как читающие; разработчики в Buff Code — все, с записью в журнал.")}">${t("пользовательское")}</span>`
           : "";
         return `<div class="ui-card" data-item>
           <div class="ui-card__header">
             <h3 class="ui-card__title title-row">${esc(i.alias || i.slug)} ${pill(cls, esc(STATUS_NAMES[i.status] || i.status), ` title="${esc(i.status)}"`)}${custom}${i.ai_notes_unbounded
-              ? `<span class="ui-badge ui-badge--sm ui-badge--warn tip" tabindex="0" data-tip="Ограничение длины пояснений для ИИ снято. Весь текст попадает в промпт модели в каждом прогоне с этим подключением; избыточный текст ухудшает её работу и увеличивает стоимость. Снять — в настройках подключения.">⚠ пояснения без лимита</span>`
+              ? `<span class="ui-badge ui-badge--sm ui-badge--warn tip" tabindex="0" data-tip="${t("Ограничение длины пояснений для ИИ снято. Весь текст попадает в промпт модели в каждом прогоне с этим подключением; избыточный текст ухудшает её работу и увеличивает стоимость. Снять — в настройках подключения.")}">⚠ ${t("пояснения без лимита")}</span>`
               : ""}</h3>
-            <p class="ui-card__description" title="идентификатор ${esc(i.id)} · имя в инструментах модели: ${esc(i.slug)}">${esc(i.plugin)} ${esc(i.version)}${i.latest ? ` ${pill("warn", `есть ${esc(i.latest)}`, ' title="Опубликована более новая версия. Обновление — ваше решение: подключение не меняется само."')}` : ""} ${i.dev_project ? " · проект " + esc(i.dev_project) : ""}${i.custom ? " · " + esc(SOURCE_NAMES[i.source] || i.source) : ""}</p>
-            ${egress.length ? `<p class="ui-card__description">${i.custom ? "адрес" : "ходит только к"}: ${esc(egress.join(", "))}</p>` : ""}
+            <p class="ui-card__description" title="${t("идентификатор {0} · имя в инструментах модели: {1}", esc(i.id), esc(i.slug))}">${esc(i.plugin)} ${esc(i.version)}${i.latest ? ` ${pill("warn", t("есть {0}", esc(i.latest)), ` title="${t("Опубликована более новая версия. Обновление — ваше решение: подключение не меняется само.")}"`)}` : ""} ${i.dev_project ? " · " + t("проект {0}", esc(i.dev_project)) : ""}${i.custom ? " · " + esc(SOURCE_NAMES[i.source] || i.source) : ""}</p>
+            ${egress.length ? `<p class="ui-card__description">${i.custom ? t("адрес") : t("ходит только к")}: ${esc(egress.join(", "))}</p>` : ""}
           </div>
           <div class="ui-card__content stack">
             ${i.last_error ? `<p class="err">${esc(i.last_error)}</p>` : ""}
             ${tools ? `<div class="tools">${tools}</div>` : ""}
             ${i.custom && (i.tools || []).length ? `<div class="actions">
-              <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="saveMarks('${esc(i.id)}','${suffix}')">Сохранить отметки чтения</button>
-              ${hint.length ? `<button class="ui-btn ui-btn--outline ui-btn--sm" onclick="marksFromHint('${esc(i.id)}','${suffix}')">Отметить как предлагает сервер</button>` : ""}
-              <span class="ui-note">Без отметки инструмент модели не достаётся.</span></div>` : ""}
+              <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="saveMarks('${esc(i.id)}','${suffix}')">${t("Сохранить отметки чтения")}</button>
+              ${hint.length ? `<button class="ui-btn ui-btn--outline ui-btn--sm" onclick="marksFromHint('${esc(i.id)}','${suffix}')">${t("Отметить как предлагает сервер")}</button>` : ""}
+              <span class="ui-note">${t("Без отметки инструмент модели не достаётся.")}</span></div>` : ""}
           </div>
           <div class="ui-card__footer actions actions--end">
-            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="checkInstance('${esc(i.id)}','${suffix}')">Проверить связь</button>
-            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="showLog('${esc(i.id)}','${suffix}')">Журнал</button>
-            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="editInstance('${esc(i.id)}')">Настроить</button>
-            ${i.latest ? `<button class="ui-btn ui-btn--outline ui-btn--sm" onclick="installAndUpgrade('${esc(i.id)}','${esc(i.plugin)}','${esc(i.latest)}')">Обновить до ${esc(i.latest)}</button>` : ""}
-            <button class="ui-btn ui-btn--danger ui-btn--sm" onclick="deleteInstance('${esc(i.id)}')">Удалить</button>
+            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="checkInstance('${esc(i.id)}','${suffix}')">${t("Проверить связь")}</button>
+            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="showLog('${esc(i.id)}','${suffix}')">${t("Журнал")}</button>
+            <button class="ui-btn ui-btn--outline ui-btn--sm" onclick="editInstance('${esc(i.id)}')">${t("Настроить")}</button>
+            ${i.latest ? `<button class="ui-btn ui-btn--outline ui-btn--sm" onclick="installAndUpgrade('${esc(i.id)}','${esc(i.plugin)}','${esc(i.latest)}')">${t("Обновить до {0}", esc(i.latest))}</button>` : ""}
+            <button class="ui-btn ui-btn--danger ui-btn--sm" onclick="deleteInstance('${esc(i.id)}')">${t("Удалить")}</button>
           </div>
           <div class="ui-card__content stack">
             <div id="chk-${esc(i.id)}${suffix}" class="ui-note"></div>
@@ -810,7 +887,7 @@
         </div>`;
       }
 
-      const SOURCE_NAMES = { archive: "из архива", github: "из GitHub", url: "удалённый сервер", command: "своя команда" };
+      const SOURCE_NAMES = { archive: t("из архива"), github: t("из GitHub"), url: t("удалённый сервер"), command: t("своя команда") };
 
       async function saveMarks(id, suffix) {
         const read_only = [...document.querySelectorAll(`input[data-mark="${id}${suffix}"]:checked`)].map((c) => c.value);
@@ -832,11 +909,11 @@
         const tc = pstate.toolchain || {};
         const have = [tc.node ? "Node.js" : "", tc.python ? "Python" : "", tc.uvx ? "uv" : ""].filter(Boolean);
         const lack = [tc.node ? "" : "Node.js", tc.python ? "" : "Python"].filter(Boolean);
-        $("mcpToolchain").innerHTML = (have.length ? `На этой машине есть ${have.join(", ")}` : "На этой машине нет ни Node.js, ни Python") +
-          (lack.length ? ` — серверу на ${lack.join(" или ")} понадобится установка пакетным менеджером системы, туда, где его увидит пользователь подключения.` : ".");
+        $("mcpToolchain").innerHTML = (have.length ? t("На этой машине есть {0}", have.join(", ")) : t("На этой машине нет ни Node.js, ни Python")) +
+          (lack.length ? t(" — серверу на {0} понадобится установка пакетным менеджером системы, туда, где его увидит пользователь подключения.", lack.join(t(" или "))) : ".");
         const list = (pstate.instances || []).filter((i) => i.custom);
         badge("mcp", list.length ? String(list.length) : "");
-        $("mcpList").innerHTML = list.length ? list.map((i) => instanceCard(i, "-mcp")).join("") : '<div class="ui-empty ui-empty--inline">Пока нет.</div>';
+        $("mcpList").innerHTML = list.length ? list.map((i) => instanceCard(i, "-mcp")).join("") : `<div class="ui-empty ui-empty--inline">${t("Пока нет.")}</div>`;
       }
 
       (function dropZone() {
@@ -855,7 +932,7 @@
       async function mcpUpload(file) {
         if (!file) return;
         const status = $("mcpStatus");
-        status.innerHTML = `Распаковываем <b>${esc(file.name)}</b> и ставим зависимости — это может занять несколько минут…`;
+        status.innerHTML = t("Распаковываем <b>{0}</b> и ставим зависимости — это может занять несколько минут…", esc(file.name));
         const form = new FormData();
         form.append("archive", file, file.name);
         let r;
@@ -872,7 +949,7 @@
 
       async function mcpGithub() {
         const status = $("mcpStatus");
-        status.innerHTML = `Скачиваем <b>${esc($("mcpRepo").value)}</b> и ставим зависимости — это может занять несколько минут…`;
+        status.innerHTML = t("Скачиваем <b>{0}</b> и ставим зависимости — это может занять несколько минут…", esc($("mcpRepo").value));
         const r = await api("/api/mcp/github", { url: $("mcpRepo").value.trim(), token: $("mcpRepoToken").value });
         mcpPrepared(r);
       }
@@ -882,13 +959,13 @@
         if (!r.ok) { status.innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
         status.innerHTML = r.draft.needs
           ? `<span class="err">${esc(r.draft.needs)}</span>`
-          : `<span class="ok">Готово: ${esc(r.draft.launch.name || r.draft.origin)}${r.draft.launch.version ? " " + esc(r.draft.launch.version) : ""}.</span> Проверьте, что будет запущено, и сохраните.`;
+          : `<span class="ok">${t("Готово: {0}.", esc(r.draft.launch.name || r.draft.origin) + (r.draft.launch.version ? " " + esc(r.draft.launch.version) : ""))}</span> ${t("Проверьте, что будет запущено, и сохраните.")}`;
         renderMcpForm(r.draft, {});
       }
 
       function mcpRemote() {
         const url = $("mcpUrl").value.trim();
-        if (!url) { $("mcpStatus").innerHTML = `<span class="err">Укажите адрес сервера.</span>`; return; }
+        if (!url) { $("mcpStatus").innerHTML = `<span class="err">${t("Укажите адрес сервера.")}</span>`; return; }
         $("mcpStatus").textContent = "";
         renderMcpForm({ id: "", source: "url", origin: url, launch: { url, fields: [] } }, {});
       }
@@ -907,57 +984,55 @@
           const label = esc(f.title || f.key) + (f.required ? " *" : "");
           const desc = f.description ? esc(f.description) : "";
           if (f.sensitive) {
-            const keep = cfg.id && (cfg.credential_kinds || {})[f.key] ? "оставьте пустым, чтобы не менять" : "";
+            const keep = cfg.id && (cfg.credential_kinds || {})[f.key] ? t("оставьте пустым, чтобы не менять") : "";
             return field(label, `<input id="mf-${esc(f.key)}" class="ui-input" type="password" autocomplete="off" placeholder="${keep}" />`, desc);
           }
           const val = (cfg.config || {})[f.key] ?? f.default ?? "";
           if (f.type === "boolean") return checkRow(`mf-${esc(f.key)}`, `<span>${label}</span>${desc ? `<span class="ui-hint">${desc}</span>` : ""}`, val === true || val === "true");
-          const t = f.type === "number" ? "number" : "text";
-          return field(label, `<input id="mf-${esc(f.key)}" class="ui-input" type="${t}" value="${esc(val)}" />`, desc);
+          const type = f.type === "number" ? "number" : "text";
+          return field(label, `<input id="mf-${esc(f.key)}" class="ui-input" type="${type}" value="${esc(val)}" />`, desc);
         }).join("");
         const run = remote
-          ? field("Адрес сервера", `<input id="m-url" class="ui-input" value="${esc(l.url || "")}" placeholder="https://mcp.example.com/mcp" />`) +
-            field("Заголовок Authorization — если сервер его требует",
-              `<input id="m-auth" class="ui-input" type="password" autocomplete="off" placeholder="${cfg.id && (cfg.credential_kinds || {}).authorization ? "оставьте пустым, чтобы не менять" : "Bearer …"}" />`,
-              "Хранится в каталоге секретов коннектора и отправляется с каждым запросом.")
-          : field("Команда", `<input id="m-cmd" class="ui-input" value="${esc(l.command || "")}" placeholder="node" />`,
-              "Слова упаковки <code>node</code>, <code>npx</code>, <code>python</code>, <code>uvx</code> коннектор подставит с этой машины.") +
-            field("Аргументы — по одному в строке", `<textarea id="m-args" class="ui-textarea" rows="3">${esc((l.args || []).join("\n"))}</textarea>`,
-              "<code>${__dirname}</code> — каталог с кодом сервера, <code>${user_config.имя}</code> — значение настройки ниже.") +
-            field("Переменные окружения — <code>ИМЯ=значение</code>, по одной в строке",
+          ? field(t("Адрес сервера"), `<input id="m-url" class="ui-input" value="${esc(l.url || "")}" placeholder="https://mcp.example.com/mcp" />`) +
+            field(t("Заголовок Authorization — если сервер его требует"),
+              `<input id="m-auth" class="ui-input" type="password" autocomplete="off" placeholder="${cfg.id && (cfg.credential_kinds || {}).authorization ? t("оставьте пустым, чтобы не менять") : "Bearer …"}" />`,
+              t("Хранится в каталоге секретов коннектора и отправляется с каждым запросом."))
+          : field(t("Команда"), `<input id="m-cmd" class="ui-input" value="${esc(l.command || "")}" placeholder="node" />`,
+              t("Слова упаковки <code>node</code>, <code>npx</code>, <code>python</code>, <code>uvx</code> коннектор подставит с этой машины.")) +
+            field(t("Аргументы — по одному в строке"), `<textarea id="m-args" class="ui-textarea" rows="3">${esc((l.args || []).join("\n"))}</textarea>`,
+              t("<code>${__dirname}</code> — каталог с кодом сервера, <code>${user_config.имя}</code> — значение настройки ниже.")) +
+            field(t("Переменные окружения — <code>ИМЯ=значение</code>, по одной в строке"),
               `<textarea id="m-env" class="ui-textarea" rows="3">${esc(Object.entries(l.env || {}).map(([k, v]) => k + "=" + v).join("\n"))}</textarea>`) +
-            field("Секреты в окружении — <code>ИМЯ=значение</code>, по одному в строке",
-              `<textarea id="m-secrets" class="ui-textarea" rows="2" placeholder="${cfg.id ? "уже сохранённые остаются; здесь — новые или изменённые" : "например API_TOKEN=…"}"></textarea>`,
-              "Попадут серверу как переменные окружения, а в файле настроек останется только ссылка на секрет.");
+            field(t("Секреты в окружении — <code>ИМЯ=значение</code>, по одному в строке"),
+              `<textarea id="m-secrets" class="ui-textarea" rows="2" placeholder="${cfg.id ? t("уже сохранённые остаются; здесь — новые или изменённые") : t("например API_TOKEN=…")}"></textarea>`,
+              t("Попадут серверу как переменные окружения, а в файле настроек останется только ссылка на секрет."));
         const needs = d.needs ? callout("crit", esc(d.needs)) : "";
-        const log = d.log ? `<details><summary class="ui-note">Журнал установки зависимостей</summary><pre class="ui-code-block log">${esc(d.log)}</pre></details>` : "";
-        const tools = (l.tools || []).length ? `<p class="ui-note">Упаковка обещает инструменты: ${esc(l.tools.join(", "))}. Что из этого читающее — отметите после запуска.</p>` : "";
+        const log = d.log ? `<details><summary class="ui-note">${t("Журнал установки зависимостей")}</summary><pre class="ui-code-block log">${esc(d.log)}</pre></details>` : "";
+        const tools = (l.tools || []).length ? `<p class="ui-note">${t("Упаковка обещает инструменты: {0}. Что из этого читающее — отметите после запуска.", esc(l.tools.join(", ")))}</p>` : "";
         $("mcpForm").innerHTML = `<div class="ui-card" data-item>
           <div class="ui-card__header">
-            <h3 class="ui-card__title title-row">${cfg.id ? "Настройка своего сервера" : "Новый сервер"} — ${esc(l.name || d.origin || "")}${l.version ? " " + esc(l.version) : ""}
-              ${pill("warn", "пользовательское")}</h3>
+            <h3 class="ui-card__title title-row">${cfg.id ? t("Настройка своего сервера") : t("Новый сервер")} — ${esc(l.name || d.origin || "")}${l.version ? " " + esc(l.version) : ""}
+              ${pill("warn", t("пользовательское"))}</h3>
             <p class="ui-card__description">${esc(SOURCE_NAMES[d.source] || d.source)}${d.origin ? ": " + esc(d.origin) : ""}${l.runtime ? " · " + esc(l.runtime) : ""}</p>
           </div>
           <div class="ui-card__content stack">
             ${needs}
             <div class="grid">
-              ${field("Название", `<input id="m-alias" class="ui-input" value="${esc(cfg.alias || l.name || "")}" placeholder="Погода" />`)}
-              ${field("Проект разработки", `<input id="m-dev" class="ui-input" value="${esc(cfg.dev_project || "")}" placeholder="backend" />`,
-                "Название проекта внутри вашей организации, без организации и без косой черты.")}
+              ${field(t("Название"), `<input id="m-alias" class="ui-input" value="${esc(cfg.alias || l.name || "")}" placeholder="${t("Погода")}" />`)}
+              ${field(t("Проект разработки"), `<input id="m-dev" class="ui-input" value="${esc(cfg.dev_project || "")}" placeholder="backend" />`,
+                t("Название проекта внутри вашей организации, без организации и без косой черты."))}
             </div>
-            <h3 class="ui-title group-title">${remote ? "Куда подключаемся" : "Что будет запущено"}</h3>
+            <h3 class="ui-title group-title">${remote ? t("Куда подключаемся") : t("Что будет запущено")}</h3>
             ${run}
-            ${fields ? `<h3 class="ui-title group-title">Настройки сервера</h3>${fields}` : ""}
+            ${fields ? `<h3 class="ui-title group-title">${t("Настройки сервера")}</h3>${fields}` : ""}
             ${tools}
             ${notesSection(cfg)}
             ${log}
-            ${callout("info", checkRow("m-accept", `<span>Я понимаю, что код этого сервера не проверялся Buff, что его обращения в сеть коннектор не
-                ограничивает, и что он будет работать на этой машине под отдельным пользователем ОС. Модель
-                получит только те инструменты, которые я отмечу как читающие.</span>`, cfg.id))}
+            ${callout("info", checkRow("m-accept", `<span>${t("Я понимаю, что код этого сервера не проверялся Buff, что его обращения в сеть коннектор не ограничивает, и что он будет работать на этой машине под отдельным пользователем ОС. Модель получит только те инструменты, которые я отмечу как читающие.")}</span>`, cfg.id))}
           </div>
           <div class="ui-card__footer actions actions--end">
-            <button class="ui-btn ui-btn--primary ui-btn--md" onclick="saveMcp()">Сохранить</button>
-            <button class="ui-btn ui-btn--outline ui-btn--md" onclick="document.getElementById('mcpForm').innerHTML=''">Отмена</button>
+            <button class="ui-btn ui-btn--primary ui-btn--md" onclick="saveMcp()">${t("Сохранить")}</button>
+            <button class="ui-btn ui-btn--outline ui-btn--md" onclick="document.getElementById('mcpForm').innerHTML=''">${t("Отмена")}</button>
           </div>
           <div class="ui-card__content"><div id="m-status" class="ui-note"></div></div>
         </div>`;
@@ -983,7 +1058,7 @@
         const l = d.launch || {};
         const remote = d.source === "url";
         const status = $("m-status");
-        if (!$("m-accept").checked) { status.innerHTML = `<span class="err">Без согласия сервер не будет сохранён.</span>`; return; }
+        if (!$("m-accept").checked) { status.innerHTML = `<span class="err">${t("Без согласия сервер не будет сохранён.")}</span>`; return; }
         const config = {};
         const credentials = {};
         for (const f of l.fields || []) {
@@ -1091,7 +1166,7 @@
       function renderInstanceForm(cfg) {
         const man = manifestOf(editing.plugin, editing.version);
         const el = $("instanceForm");
-        if (!man) { el.innerHTML = '<p class="err">Интеграция не установлена.</p>'; return; }
+        if (!man) { el.innerHTML = `<p class="err">${t("Интеграция не установлена.")}</p>`; return; }
         const schema = man.schema || { properties: {} };
         const props = schema.properties || {};
         const required = schema.required || [];
@@ -1103,7 +1178,7 @@
           const val = (cfg.config || {})[key] ?? p.default;
           const label = esc(p.title || key) + (required.includes(key) ? " *" : "");
           if (p.type === "array") {
-            return field(label, `<input id="f-${esc(key)}" class="ui-input" value="${esc((val || []).join(", "))}" placeholder="через запятую" />`);
+            return field(label, `<input id="f-${esc(key)}" class="ui-input" value="${esc((val || []).join(", "))}" placeholder="${t("через запятую")}" />`);
           }
           if (p.type === "boolean") {
             return checkRow(`f-${esc(key)}`, label, val);
@@ -1115,40 +1190,38 @@
               `<option value="${esc(v)}" ${String(val ?? "") === String(v) ? "selected" : ""}>${esc(v)}</option>`).join("");
             return field(label, `<span class="ui-select"><select id="f-${esc(key)}">${options}</select></span>`);
           }
-          const t = p.type === "integer" || p.type === "number" ? "number" : "text";
-          return field(label, `<input id="f-${esc(key)}" class="ui-input" type="${t}" value="${esc(val == null ? "" : val)}" />`);
+          const type = p.type === "integer" || p.type === "number" ? "number" : "text";
+          return field(label, `<input id="f-${esc(key)}" class="ui-input" type="${type}" value="${esc(val == null ? "" : val)}" />`);
         }).join("");
         // How often THIS connection is read is the operator's call: the plugin
         // only suggests, and the placeholder shows what leaving it empty means.
         const suggested = man.poll_seconds || 20;
-        const poll = `<h3 class="ui-title group-title">События</h3>
-             <p class="ui-note">Опрос работает всегда и не требует открытых портов: коннектор сам читает источник
-             этого подключения. Интеграция без событий (например, «Интернет») опрос не использует.</p>
-             ${field("Интервал опроса, секунд",
+        const poll = `<h3 class="ui-title group-title">${t("События")}</h3>
+             <p class="ui-note">${t("Опрос работает всегда и не требует открытых портов: коннектор сам читает источник этого подключения. Интеграция без событий (например, «Интернет») опрос не использует.")}</p>
+             ${field(t("Интервал опроса, секунд"),
                `<input id="i-poll" class="ui-input" type="number" min="1" step="1" value="${cfg.poll_seconds ? esc(cfg.poll_seconds) : ""}"
                  placeholder="${esc(suggested)}" />`,
-               `Пусто — ${man.poll_seconds ? "как предлагает интеграция" : "по умолчанию"}: раз в ${esc(suggested)} с.
-               Чем чаще, тем больше запросов к источнику — у него могут быть свои лимиты.`)}`;
+               (man.poll_seconds ? t("Пусто — как предлагает интеграция: раз в {0} с.", esc(suggested)) : t("Пусто — по умолчанию: раз в {0} с.", esc(suggested))) +
+               " " + t("Чем чаще, тем больше запросов к источнику — у него могут быть свои лимиты."))}`;
         // Only a plugin whose manifest says it can be woken gets a listener: an
         // open port for a plugin that ignores callbacks is an open port for
         // nothing.
-        const hooks = poll + ((man.webhook && man.webhook !== "none" && man.webhook !== "нет")
-          ? `<p class="ui-note">Вебхук — ускорение поверх опроса:
+        const hooks = poll + ((man.webhook && man.webhook !== "none" && man.webhook !== "нет") // i18n: data — an old manifest's spelling of none
+          ? `<p class="ui-note">${t("Вебхук — ускорение поверх опроса:")}
              ${man.webhook === "deliver"
-               ? "трекер сообщает о событии сразу. Вызов принимает сам коннектор: проверяет секрет и подпись и только потом передаёт событие интеграции — своих портов она не открывает."
-               : "трекер сообщает «есть новое», и коннектор проверяет источник сразу, не дожидаясь следующего опроса."}</p>
-             ${checkRow("i-hook", "Принимать вебхуки для этого подключения", cfg.webhook)}
+               ? t("трекер сообщает о событии сразу. Вызов принимает сам коннектор: проверяет секрет и подпись и только потом передаёт событие интеграции — своих портов она не открывает.")
+               : t("трекер сообщает «есть новое», и коннектор проверяет источник сразу, не дожидаясь следующего опроса.")}</p>
+             ${checkRow("i-hook", t("Принимать вебхуки для этого подключения"), cfg.webhook)}
              ${pstate.webhooks && pstate.webhooks.listen
                 ? (cfg.webhook_url
                     ? `<div class="stack stack--tight">
-                         <p class="ui-note">Ссылка для трекера — её выдаёт коннектор:</p>
+                         <p class="ui-note">${t("Ссылка для трекера — её выдаёт коннектор:")}</p>
                          <div class="ui-panel ui-panel--inset hookurl"><code id="i-hook-url">${esc(cfg.webhook_url)}</code>
-                           <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="copyHookURL()">Скопировать</button></div>
+                           <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="copyHookURL()">${t("Скопировать")}</button></div>
                          <span id="i-hook-copied" class="ok"></span>
                        </div>`
-                    : `<p class="ui-note">Ссылка появится после сохранения.</p>`)
-                : `<p class="ui-note">Приёмник выключен для всего коннектора — включите его в разделе
-                   <a class="ui-link" href="#/link">Подключение</a>.</p>`}
+                    : `<p class="ui-note">${t("Ссылка появится после сохранения.")}</p>`)
+                : `<p class="ui-note">${t("Приёмник выключен для всего коннектора — включите его в разделе <a class=\"ui-link\" href=\"#/link\">Подключение</a>.")}</p>`}
              ${signing(man, cfg)}`
           : "");
         // A tracker that authenticates with basic auth needs the account the
@@ -1157,13 +1230,13 @@
         const creds = (man.credentials || []).map((c) => credentialSection(c, cfg)).join("");
         el.innerHTML = `<div class="ui-card" data-item>
           <div class="ui-card__header">
-            <h3 class="ui-card__title">${cfg.id ? "Настройка подключения" : "Новое подключение"} — ${esc(editing.plugin)} ${esc(editing.version)}</h3>
+            <h3 class="ui-card__title">${cfg.id ? t("Настройка подключения") : t("Новое подключение")} — ${esc(editing.plugin)} ${esc(editing.version)}</h3>
           </div>
           <div class="ui-card__content stack">
             <div class="grid">
-              ${field("Название", `<input id="i-alias" class="ui-input" value="${esc(cfg.alias || "")}" placeholder="Jira прод" />`)}
-              ${field("Проект разработки", `<input id="i-dev" class="ui-input" value="${esc(cfg.dev_project || "")}" placeholder="backend" />`,
-                "Название проекта внутри вашей организации, без организации и без косой черты.")}
+              ${field(t("Название"), `<input id="i-alias" class="ui-input" value="${esc(cfg.alias || "")}" placeholder="${t("Jira прод")}" />`)}
+              ${field(t("Проект разработки"), `<input id="i-dev" class="ui-input" value="${esc(cfg.dev_project || "")}" placeholder="backend" />`,
+                t("Название проекта внутри вашей организации, без организации и без косой черты."))}
             </div>
             ${fields}
             ${creds}
@@ -1172,8 +1245,8 @@
             ${hooks}
           </div>
           <div class="ui-card__footer actions actions--end">
-            <button class="ui-btn ui-btn--primary ui-btn--md" onclick="saveInstance()">Сохранить</button>
-            <button class="ui-btn ui-btn--outline ui-btn--md" onclick="document.getElementById('instanceForm').innerHTML=''">Отмена</button>
+            <button class="ui-btn ui-btn--primary ui-btn--md" onclick="saveInstance()">${t("Сохранить")}</button>
+            <button class="ui-btn ui-btn--outline ui-btn--md" onclick="document.getElementById('instanceForm').innerHTML=''">${t("Отмена")}</button>
           </div>
           <div class="ui-card__content"><div id="i-status" class="ui-note"></div></div>
         </div>`;
@@ -1187,13 +1260,11 @@
       const NOTES_LIMIT = 2048;
       function notesSection(cfg) {
         const unbounded = !!cfg.ai_notes_unbounded;
-        return `<h3 class="ui-title group-title">Пояснения для ИИ</h3>
-          <p class="ui-note">Свободный текст о том, что модели стоит знать про эту систему: какой проект чем
-            занимается, как у вас называют вещи, куда смотреть в первую очередь. Передаётся модели вместе с
-            описанием инструментов подключения.</p>
-          ${field("Пояснения", `<textarea id="i-notes" class="ui-textarea" oninput="notesCount()" placeholder="Например: проект PROJ — биллинг, OPS — эксплуатация. Задачи с меткой legacy не трогать.">${esc(cfg.ai_notes || "")}</textarea>
+        return `<h3 class="ui-title group-title">${t("Пояснения для ИИ")}</h3>
+          <p class="ui-note">${t("Свободный текст о том, что модели стоит знать про эту систему: какой проект чем занимается, как у вас называют вещи, куда смотреть в первую очередь. Передаётся модели вместе с описанием инструментов подключения.")}</p>
+          ${field(t("Пояснения"), `<textarea id="i-notes" class="ui-textarea" oninput="notesCount()" placeholder="${t("Например: проект PROJ — биллинг, OPS — эксплуатация. Задачи с меткой legacy не трогать.")}">${esc(cfg.ai_notes || "")}</textarea>
             <span class="counter ui-hint"><span id="i-notes-count"></span><span id="i-notes-bound"></span></span>`)}
-          ${checkRow("i-notes-unbounded", "Без ограничения длины", unbounded, `onchange="notesUnboundedToggle(this)"`)}
+          ${checkRow("i-notes-unbounded", t("Без ограничения длины"), unbounded, `onchange="notesUnboundedToggle(this)"`)}
           <div id="i-notes-risk">${notesRiskCard(unbounded)}</div>`;
       }
       // Who may ask the bot from a comment in the customer's own system
@@ -1201,24 +1272,16 @@
       // the platform's, because only it knows the members and the domains its
       // single sign-on vouches for.
       function askersSection(cfg) {
-        return `<h3 class="ui-title group-title">Кто может спрашивать бота</h3>
-          <p class="ui-note">Для вопросов из комментариев в самой системе — в тикете, под страницей, в документе.
-            По правилу на строку: логин (<code>petrov</code>), адрес (<code>petrov@company.ru</code>),
-            домен (<code>@company.ru</code>) или регулярное выражение (<code>/^dev-.+@company\\.ru$/</code>).
-            Пусто и галочка снята — спрашивать могут все. Остальным бот отвечает, что спросить можно в приложении Buff,
-            и ничего не запускает.</p>
-          ${field("Правила", `<textarea id="i-askers" class="ui-textarea" rows="3" placeholder="@company.ru">${esc((cfg.askers || []).join("\n"))}</textarea>`)}
-          ${checkRow("i-askers-members", "Участники организации Buff — по адресу почты; при едином входе — любой адрес на подтверждённых доменах", cfg.askers_members)}
-          <p class="ui-note">Логин и адрес берутся из самой системы, и показывают их не все. У Jira Cloud, Confluence Cloud,
-            Notion и Google Диска логина нет — только адрес, если человек его не скрыл; GitHub, GitLab и Gitea показывают адрес,
-            только если он открыт в профиле; Redmine — только токену администратора; у Bitbucket Cloud адреса нет. Figma не показывает ни того, ни другого:
-            при заданных правилах спросить из неё не сможет никто.</p>`;
+        return `<h3 class="ui-title group-title">${t("Кто может спрашивать бота")}</h3>
+          <p class="ui-note">${t("Для вопросов из комментариев в самой системе — в тикете, под страницей, в документе. По правилу на строку: логин ({0}), адрес ({1}), домен ({2}) или регулярное выражение ({3}). Пусто и галочка снята — спрашивать могут все. Остальным бот отвечает, что спросить можно в приложении Buff, и ничего не запускает.",
+            "<code>petrov</code>", "<code>petrov@company.ru</code>", "<code>@company.ru</code>", "<code>/^dev-.+@company\\.ru$/</code>")}</p>
+          ${field(t("Правила"), `<textarea id="i-askers" class="ui-textarea" rows="3" placeholder="@company.ru">${esc((cfg.askers || []).join("\n"))}</textarea>`)}
+          ${checkRow("i-askers-members", t("Участники организации Buff — по адресу почты; при едином входе — любой адрес на подтверждённых доменах"), cfg.askers_members)}
+          <p class="ui-note">${t("Логин и адрес берутся из самой системы, и показывают их не все. У Jira Cloud, Confluence Cloud, Notion и Google Диска логина нет — только адрес, если человек его не скрыл; GitHub, GitLab и Gitea показывают адрес, только если он открыт в профиле; Redmine — только токену администратора; у Bitbucket Cloud адреса нет. Figma не показывает ни того, ни другого: при заданных правилах спросить из неё не сможет никто.")}</p>`;
       }
       function notesRiskCard(unbounded) {
         return unbounded
-          ? callout("warn", `<b>Ограничение длины снято.</b> Весь текст пояснений попадает в
-               промпт модели в каждом прогоне с этим подключением. Избыточный текст ухудшает следование инструкциям и
-               увеличивает стоимость. Вы приняли этот риск; чтобы вернуть защиту, снимите галочку.`)
+          ? callout("warn", t("<b>Ограничение длины снято.</b> Весь текст пояснений попадает в промпт модели в каждом прогоне с этим подключением. Избыточный текст ухудшает следование инструкциям и увеличивает стоимость. Вы приняли этот риск; чтобы вернуть защиту, снимите галочку."))
           : "";
       }
       function notesCount() {
@@ -1227,8 +1290,8 @@
         const n = [...node.value].length;
         const unbounded = $("i-notes-unbounded").checked;
         const over = !unbounded && n > NOTES_LIMIT;
-        $("i-notes-count").textContent = plural(n, "символ", "символа", "символов");
-        $("i-notes-bound").textContent = unbounded ? "без ограничения длины" : `не больше ${NOTES_LIMIT} символов`;
+        $("i-notes-count").textContent = plural(n, t("символ"), t("символа"), t("символов"));
+        $("i-notes-bound").textContent = unbounded ? t("без ограничения длины") : t("не больше {0} символов", NOTES_LIMIT);
         $("i-notes-count").parentElement.classList.toggle("over", over);
         node.setAttribute("aria-invalid", over ? "true" : "false");
       }
@@ -1254,19 +1317,19 @@
       // What the page calls a connection's state and a plugin's webhook mode —
       // in words, not in the identifiers the API carries (cloud-front#475).
       const STATUS_NAMES = {
-        running: "работает", starting: "запускается", stopped: "остановлено", failed: "ошибка",
-        backoff: "перезапуск после сбоя", "no-isolation": "нет изоляции",
+        running: t("работает"), starting: t("запускается"), stopped: t("остановлено"), failed: t("ошибка"),
+        backoff: t("перезапуск после сбоя"), "no-isolation": t("нет изоляции"),
       };
       const WEBHOOK_NAMES = {
-        none: "не принимает", deliver: "принимает по ссылке с секретом",
-        wake: "принимает сигнал «есть новое» по ссылке с секретом",
+        none: t("не принимает"), deliver: t("принимает по ссылке с секретом"),
+        wake: t("принимает сигнал «есть новое» по ссылке с секретом"),
       };
       // The field a secret of that kind is typed into.
-      const SECRET_NAMES = { bearer: "Токен", basic: "Токен", header: "Ключ API" };
+      const SECRET_NAMES = { bearer: t("Токен"), basic: t("Токен"), header: t("Ключ API") };
       const KIND_NAMES = {
-        bearer: "токен", basic: "учётная запись и токен", header: "ключ API",
-        service_account: "сервисный аккаунт (JSON-ключ)", oauth2: "вход через свою учётную запись (OAuth)",
-        password: "учётная запись и пароль (передаются интеграции)",
+        bearer: t("токен"), basic: t("учётная запись и токен"), header: t("ключ API"),
+        service_account: t("сервисный аккаунт (JSON-ключ)"), oauth2: t("вход через свою учётную запись (OAuth)"),
+        password: t("учётная запись и пароль (передаются интеграции)"),
       };
 
       // One credential of the plugin: which KIND it is, when the plugin offers
@@ -1278,7 +1341,7 @@
         const kinds = c.kinds || [];
         const current = (cfg.credential_kinds || {})[c.name] || kinds[0] || "bearer";
         const chooser = kinds.length > 1
-          ? field("Способ входа", `<span class="ui-select"><select id="cred-kind-${esc(c.name)}" onchange="renderCredInputs(${esc(JSON.stringify(c.name))})">
+          ? field(t("Способ входа"), `<span class="ui-select"><select id="cred-kind-${esc(c.name)}" onchange="renderCredInputs(${esc(JSON.stringify(c.name))})">
                  ${kinds.map((k) => `<option value="${esc(k)}" ${k === current ? "selected" : ""}>${esc(KIND_NAMES[k] || k)}</option>`).join("")}
                </select></span>`, "", ` title="${esc(c.name)}"`)
           : "";
@@ -1293,47 +1356,47 @@
       // Where a sign-in that landed in a browser on another machine is finished by hand.
       function oauthPaste(cfg, c) {
         const n = esc(c.name);
-        return field("Если браузер не на этой машине — вставьте сюда адрес страницы, на которую вернул источник",
+        return field(t("Если браузер не на этой машине — вставьте сюда адрес страницы, на которую вернул источник"),
           `<input id="oauth-paste-${n}" class="ui-input" type="text" autocomplete="off" placeholder="http://127.0.0.1:…/oauth/callback?state=…&amp;code=…" />
-           <span><button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="oauthFinish(${esc(JSON.stringify(cfg.id))}, ${esc(JSON.stringify(c.name))})">Завершить вход</button></span>`);
+           <span><button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="oauthFinish(${esc(JSON.stringify(cfg.id))}, ${esc(JSON.stringify(c.name))})">${t("Завершить вход")}</button></span>`);
       }
       function credInputs(c, cfg, kind) {
         const n = esc(c.name);
         const saved = cfg.id && (cfg.credential_kinds || {})[c.name] === kind;
-        const keep = saved ? "оставьте пустым, чтобы не менять" : "";
+        const keep = saved ? t("оставьте пустым, чтобы не менять") : "";
         if (kind === "service_account") {
-          return field("JSON-ключ сервисного аккаунта",
-            `<textarea id="cred-${n}" class="ui-textarea" rows="4" placeholder="${keep || "вставьте содержимое файла ключа целиком"}"></textarea>`,
-            "Файл, скачанный при создании ключа в консоли облака. Поделитесь папками с адресом этого аккаунта.");
+          return field(t("JSON-ключ сервисного аккаунта"),
+            `<textarea id="cred-${n}" class="ui-textarea" rows="4" placeholder="${keep || t("вставьте содержимое файла ключа целиком")}"></textarea>`,
+            t("Файл, скачанный при создании ключа в консоли облака. Поделитесь папками с адресом этого аккаунта."));
         }
         if (kind === "oauth2") {
           const st = (cfg.oauth || {})[c.name] || {};
           const signIn = saved
             ? `<div class="actions">
                  ${st.signed_in
-                   ? `<span class="ok">Вход выполнен${st.account ? " как " + esc(st.account) : ""}.</span>`
-                   : `<span class="err">Вход ещё не выполнен.</span>`}
-                 <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="oauthStart(${esc(JSON.stringify(cfg.id))}, ${esc(JSON.stringify(c.name))})">${st.signed_in ? "Войти заново" : "Войти"}</button>
+                   ? `<span class="ok">${st.account ? t("Вход выполнен как {0}.", esc(st.account)) : t("Вход выполнен.")}</span>`
+                   : `<span class="err">${t("Вход ещё не выполнен.")}</span>`}
+                 <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="oauthStart(${esc(JSON.stringify(cfg.id))}, ${esc(JSON.stringify(c.name))})">${st.signed_in ? t("Войти заново") : t("Войти")}</button>
                  <span id="oauth-status-${n}" class="ui-note"></span>
                </div>
                ${st.signed_in
                  // Signed in, the paste is only for signing in again from another
                  // machine — folded, so the form does not read as unfinished.
-                 ? `<details><summary class="ui-note">Браузер на другой машине?</summary>${oauthPaste(cfg, c)}</details>`
+                 ? `<details><summary class="ui-note">${t("Браузер на другой машине?")}</summary>${oauthPaste(cfg, c)}</details>`
                  : oauthPaste(cfg, c)}`
-            : `<p class="ui-note">Сохраните подключение — после этого здесь появится кнопка «Войти».</p>`;
+            : `<p class="ui-note">${t("Сохраните подключение — после этого здесь появится кнопка «Войти».")}</p>`;
           return `<div class="grid">
-            ${field("Client ID своего OAuth-клиента", `<input id="cred-oauth-id-${n}" class="ui-input" autocomplete="off" placeholder="${keep || "…apps.googleusercontent.com"}" />`)}
+            ${field(t("Client ID своего OAuth-клиента"), `<input id="cred-oauth-id-${n}" class="ui-input" autocomplete="off" placeholder="${keep || "…apps.googleusercontent.com"}" />`)}
             ${field("Client secret", `<input id="cred-oauth-secret-${n}" class="ui-input" type="password" autocomplete="off" placeholder="${keep}" />`)}
             </div>${signIn}`;
         }
         const account = kind === "basic" || kind === "password"
-          ? field("Учётная запись", `<input id="cred-user-${n}" class="ui-input" value="${esc(((cfg.credential_users || {})[c.name] || ""))}"
-                 placeholder="${kind === "password" ? "например CORP\\svc-buff или svc-buff" : "например buff@company.ru"}" />`, "", ` title="${n}"`)
+          ? field(t("Учётная запись"), `<input id="cred-user-${n}" class="ui-input" value="${esc(((cfg.credential_users || {})[c.name] || ""))}"
+                 placeholder="${kind === "password" ? t("например CORP\\svc-buff или svc-buff") : t("например buff@company.ru")}" />`, "", ` title="${n}"`)
           : "";
         if (kind === "password") {
-          return `${account}${field("Пароль", `<input id="cred-${n}" class="ui-input" type="password" placeholder="${keep}" />`,
-            "Этот пароль интеграция получает сама: её протокол коннектор подставить не может. Заведите отдельную учётную запись только на чтение.",
+          return `${account}${field(t("Пароль"), `<input id="cred-${n}" class="ui-input" type="password" placeholder="${keep}" />`,
+            t("Этот пароль интеграция получает сама: её протокол коннектор подставить не может. Заведите отдельную учётную запись только на чтение."),
             ` title="${n}"`)}`;
         }
         return `${account}${field(esc(SECRET_NAMES[kind] || KIND_NAMES[kind] || kind),
@@ -1360,13 +1423,13 @@
         // A new tab, because the return replaces the page it lands in, and
         // this one stays open with the paste field for when it lands nowhere.
         window.open(r.url, "_blank", "noopener");
-        status.textContent = "Завершите вход в открывшейся вкладке; потом обновите эту страницу.";
+        status.textContent = t("Завершите вход в открывшейся вкладке; потом обновите эту страницу.");
       }
       async function oauthFinish(id, name) {
         const status = $("oauth-status-" + name);
         const r = await api("/api/instances/oauth/finish", { id, name, pasted: $("oauth-paste-" + name).value });
         if (!r.ok) { status.innerHTML = `<span class="err">${esc(r.error)}</span>`; return; }
-        status.innerHTML = `<span class="ok">Вход выполнен${r.account ? " как " + esc(r.account) : ""}.</span>`;
+        status.innerHTML = `<span class="ok">${r.account ? t("Вход выполнен как {0}.", esc(r.account)) : t("Вход выполнен.")}</span>`;
         await load();
         await loadPlugins();
       }
@@ -1379,26 +1442,22 @@
         const spec = man.signature || {};
         if (!spec.secret_from) return "";
         const got = cfg.signing_secret
-          ? `<p class="ui-note">Токен подписи, который прислал источник — вставьте его в форму
-               подтверждения подписки там:</p>
+          ? `<p class="ui-note">${t("Токен подписи, который прислал источник — вставьте его в форму подтверждения подписки там:")}</p>
              <div class="ui-panel ui-panel--inset hookurl"><code id="i-sign-token">${esc(cfg.signing_secret)}</code>
-               <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="copyFrom('i-sign-token','i-sign-copied')">Скопировать</button></div>
+               <button type="button" class="ui-btn ui-btn--outline ui-btn--sm" onclick="copyFrom('i-sign-token','i-sign-copied')">${t("Скопировать")}</button></div>
              <span id="i-sign-copied" class="ok"></span>`
-          : `<p class="ui-note">Токен подписи ещё не получен: сохраните подключение, добавьте
-               ссылку выше в настройках интеграции у источника — его первый вызов принесёт токен, и он появится здесь.</p>`;
+          : `<p class="ui-note">${t("Токен подписи ещё не получен: сохраните подключение, добавьте ссылку выше в настройках интеграции у источника — его первый вызов принесёт токен, и он появится здесь.")}</p>`;
         const pending = cfg.signing_secret_pending
-          ? `<p class="err">Источник прислал <b>новый</b> токен подписи:
-               <code id="i-sign-pending">${esc(cfg.signing_secret_pending)}</code>. Вызовы пока проверяются прежним.
-               Чтобы принять новый, вставьте его в поле ниже и сохраните.</p>`
+          ? `<p class="err">${t("Источник прислал <b>новый</b> токен подписи: {0}. Вызовы пока проверяются прежним. Чтобы принять новый, вставьте его в поле ниже и сохраните.",
+               `<code id="i-sign-pending">${esc(cfg.signing_secret_pending)}</code>`)}</p>`
           : "";
         return `<div class="stack">
-          <p class="ui-note">Подпись: источник подписывает вызовы <b>своим</b> токеном
-            (заголовок <code>${esc(spec.header || "")}</code>), а не секретом из ссылки. Коннектор проверяет каждый вызов этим
-            токеном; без него подписанные вызовы отклоняются.</p>
+          <p class="ui-note">${t("Подпись: источник подписывает вызовы <b>своим</b> токеном (заголовок {0}), а не секретом из ссылки. Коннектор проверяет каждый вызов этим токеном; без него подписанные вызовы отклоняются.",
+            `<code>${esc(spec.header || "")}</code>`)}</p>
           ${got}${pending}
-          ${field("Секрет подписи — ввести вручную",
-            `<input id="i-sign" class="ui-input" type="text" autocomplete="off" placeholder="обычно не нужно: коннектор получает его сам" />`,
-            "Заполняйте, только если подписку пересоздали и нужно принять новый токен.")}
+          ${field(t("Секрет подписи — ввести вручную"),
+            `<input id="i-sign" class="ui-input" type="text" autocomplete="off" placeholder="${t("обычно не нужно: коннектор получает его сам")}" />`,
+            t("Заполняйте, только если подписку пересоздали и нужно принять новый токен."))}
         </div>`;
       }
 
@@ -1460,17 +1519,17 @@
 
       async function checkInstance(id, suffix = "") {
         const el = $("chk-" + id + suffix);
-        el.textContent = "Проверяем…";
+        el.textContent = t("Проверяем…");
         const r = await api("/api/instances/check", { id });
         el.innerHTML = r.ok
-          ? `<span class="ok">${esc((r.result && r.result.detail) || "связь есть")}</span>`
+          ? `<span class="ok">${esc((r.result && r.result.detail) || t("связь есть"))}</span>`
           : `<span class="err">${esc(r.error)}</span>`;
       }
 
       async function showLog(id, suffix = "") {
         const r = await api("/api/instances/log?id=" + encodeURIComponent(id));
         const lines = (r.lines || []).map((l) => esc(l.text)).join("\n");
-        $("log-" + id + suffix).innerHTML = `<pre class="ui-code-block log">${lines || "журнал пуст"}</pre>`;
+        $("log-" + id + suffix).innerHTML = `<pre class="ui-code-block log">${lines || t("журнал пуст")}</pre>`;
       }
 
       // ---- Buff Code (#368) ----------------------------------------------
@@ -1481,9 +1540,9 @@
         if (!list.length) return;
         $("ideDevs").innerHTML = list.map((d) => `<div class="ui-card" data-item>
           <div class="ui-card__header">
-            <h3 class="ui-card__title title-row">${esc(d.developer)} ${pill("ok", plural(d.calls, "вызов", "вызова", "вызовов"))}${d.errors
-              ? ` ${pill("warn", plural(d.errors, "с ошибкой", "с ошибкой", "с ошибкой"))}` : ""}</h3>
-            <p class="ui-card__description">последний вызов — ${esc(new Date(d.last).toLocaleString("ru-RU"))}</p>
+            <h3 class="ui-card__title title-row">${esc(d.developer)} ${pill("ok", plural(d.calls, t("вызов"), t("вызова"), t("вызовов")))}${d.errors
+              ? ` ${pill("warn", t("{0} с ошибкой", d.errors))}` : ""}</h3>
+            <p class="ui-card__description">${t("последний вызов — {0}", esc(new Date(d.last).toLocaleString(LANG === "en" ? "en-GB" : "ru-RU")))}</p>
           </div>
         </div>`).join("");
       }
@@ -1502,12 +1561,12 @@
 
       function renderProviders() {
         const el = $("provs");
-        if (!st.providers || !st.providers.length) { el.innerHTML = '<div class="ui-empty ui-empty--inline">Пока нет провайдеров.</div>'; return; }
+        if (!st.providers || !st.providers.length) { el.innerHTML = `<div class="ui-empty ui-empty--inline">${t("Пока нет провайдеров.")}</div>`; return; }
         el.innerHTML = `<div class="ui-table-frame ui-table-frame--framed"><div class="ui-table-wrap"><table class="ui-table">
-          <thead><tr><th>Тип</th><th>Адрес</th><th class="ui-table__num">Репозитории</th><th></th></tr></thead>
+          <thead><tr><th>${t("Тип")}</th><th>${t("Адрес")}</th><th class="ui-table__num">${t("Репозитории")}</th><th></th></tr></thead>
           <tbody>${st.providers.map((p, i) =>
-            `<tr><td><b>${p.kind}</b></td><td class="ui-table__muted">${p.base_url}</td><td class="ui-table__num">${(p.repos || []).length} репо</td>
-               <td class="ui-table__num"><button class="ui-btn ui-btn--danger ui-btn--sm" onclick="removeProvider(${i})">удалить</button></td></tr>`).join("")}</tbody>
+            `<tr><td><b>${p.kind}</b></td><td class="ui-table__muted">${p.base_url}</td><td class="ui-table__num">${t("{0} репо", (p.repos || []).length)}</td>
+               <td class="ui-table__num"><button class="ui-btn ui-btn--danger ui-btn--sm" onclick="removeProvider(${i})">${t("удалить")}</button></td></tr>`).join("")}</tbody>
         </table></div></div>`;
       }
 
@@ -1526,20 +1585,20 @@
 
       async function validate() {
         const vs = $("vstatus");
-        vs.textContent = "проверка…"; vs.className = "ui-note";
+        vs.textContent = t("проверка…"); vs.className = "ui-note";
         const res = await api("/api/validate", { kind: $("kind").value, base_url: $("base").value, token: $("token").value });
-        if (!res.ok) { vs.textContent = "нет доступа: " + res.error; vs.className = "err"; $("repobox").style.display = "none"; return; }
-        vs.textContent = "доступ есть ✓"; vs.className = "ok";
+        if (!res.ok) { vs.textContent = t("нет доступа: {0}", res.error); vs.className = "err"; $("repobox").style.display = "none"; return; }
+        vs.textContent = t("доступ есть ✓"); vs.className = "ok";
         $("repos").innerHTML = (res.repos || []).map((r) =>
-          `<label class="ui-check"><input type="checkbox" class="ui-checkbox" value="${r.repo}" /><span>${r.repo}</span>${r.private ? pill("neutral", "private") : ""}</label>`).join("") || '<span class="ui-note">Репозитории не найдены.</span>';
+          `<label class="ui-check"><input type="checkbox" class="ui-checkbox" value="${r.repo}" /><span>${r.repo}</span>${r.private ? pill("neutral", "private") : ""}</label>`).join("") || `<span class="ui-note">${t("Репозитории не найдены.")}</span>`;
         $("repobox").style.display = "";
       }
 
       async function addProvider() {
         const checked = [...document.querySelectorAll("#repos input:checked")].map((c) => c.value);
-        if (!checked.length) { alert("Отметьте хотя бы один репозиторий"); return; }
+        if (!checked.length) { alert(t("Отметьте хотя бы один репозиторий")); return; }
         const res = await persist({ kind: $("kind").value, base_url: $("base").value, token: $("token").value, repos: checked });
-        if (!res.ok) { alert("Ошибка сохранения: " + res.error); return; }
+        if (!res.ok) { alert(t("Ошибка сохранения: {0}", res.error)); return; }
         $("token").value = ""; $("base").value = "";
         $("repobox").style.display = "none"; $("vstatus").textContent = "";
         await load();
@@ -1548,16 +1607,16 @@
       async function removeProvider(i) {
         st.providers.splice(i, 1);
         const res = await persist(null);
-        if (!res.ok) alert("Ошибка: " + res.error);
+        if (!res.ok) alert(t("Ошибка: {0}", res.error));
         await load();
       }
 
       async function doPair() {
         const ps = $("pstatus");
-        ps.textContent = "привязка…"; ps.className = "ui-note";
+        ps.textContent = t("привязка…"); ps.className = "ui-note";
         const res = await api("/api/pair", { code: $("code").value.trim() });
-        if (!res.ok) { ps.textContent = "не удалось: " + res.error; ps.className = "err"; return; }
-        ps.textContent = "готово ✓ агент подключён"; ps.className = "ok";
+        if (!res.ok) { ps.textContent = t("не удалось: {0}", res.error); ps.className = "err"; return; }
+        ps.textContent = t("готово ✓ агент подключён"); ps.className = "ok";
       }
 
       // ---- theme ----------------------------------------------------------
@@ -1568,50 +1627,52 @@
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)");
       function readTheme() {
         try {
-          const t = localStorage.getItem(THEME_KEY);
-          return t === "light" || t === "dark" || t === "system" ? t : "system";
+          const mode = localStorage.getItem(THEME_KEY);
+          return mode === "light" || mode === "dark" || mode === "system" ? mode : "system";
         } catch {
           return "system";
         }
       }
       function paintTheme() {
-        const t = readTheme();
-        document.documentElement.classList.toggle("dark", t === "dark" || (t === "system" && prefersDark.matches));
+        const mode = readTheme();
+        document.documentElement.classList.toggle("dark", mode === "dark" || (mode === "system" && prefersDark.matches));
         for (const item of document.querySelectorAll("[data-theme-value]"))
-          item.setAttribute("aria-checked", String(item.dataset.themeValue === t));
+          item.setAttribute("aria-checked", String(item.dataset.themeValue === mode));
       }
-      function setTheme(t) {
+      function setTheme(mode) {
         try {
-          localStorage.setItem(THEME_KEY, t);
+          localStorage.setItem(THEME_KEY, mode);
         } catch {
           // Storage unavailable: the choice holds for this page only.
         }
         paintTheme();
       }
-      function openThemeMenu() {
-        $("themeMenu").hidden = false;
-        $("themeButton").setAttribute("aria-expanded", "true");
-        (document.querySelector('[data-theme-value][aria-checked="true"]') || document.querySelector("[data-theme-value]")).focus();
-      }
-      function closeThemeMenu(refocus) {
-        if ($("themeMenu").hidden) return;
-        $("themeMenu").hidden = true;
-        $("themeButton").setAttribute("aria-expanded", "false");
-        if (refocus) $("themeButton").focus();
-      }
-      (function themeSwitch() {
-        const menu = $("themeMenu");
-        const items = () => [...menu.querySelectorAll("[data-theme-value]")];
-        prefersDark.addEventListener("change", paintTheme);
-        $("themeButton").addEventListener("click", () => (menu.hidden ? openThemeMenu() : closeThemeMenu(true)));
-        $("themeButton").addEventListener("keydown", (e) => {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); openThemeMenu(); }
+      // The header's two menus — theme and language — work the same way: a trigger, a list of
+      // radio items marked by a data attribute, arrows / Home / End / Enter / Escape / Tab.
+      function menuSwitch(buttonId, menuId, attr, pick) {
+        const button = $(buttonId);
+        const menu = $(menuId);
+        const items = () => [...menu.querySelectorAll(`[${attr}]`)];
+        const open = () => {
+          menu.hidden = false;
+          button.setAttribute("aria-expanded", "true");
+          (menu.querySelector(`[${attr}][aria-checked="true"]`) || items()[0]).focus();
+        };
+        const close = (refocus) => {
+          if (menu.hidden) return;
+          menu.hidden = true;
+          button.setAttribute("aria-expanded", "false");
+          if (refocus) button.focus();
+        };
+        button.addEventListener("click", () => (menu.hidden ? open() : close(true)));
+        button.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); open(); }
         });
         menu.addEventListener("click", (e) => {
-          const item = e.target.closest("[data-theme-value]");
+          const item = e.target.closest(`[${attr}]`);
           if (!item) return;
-          setTheme(item.dataset.themeValue);
-          closeThemeMenu(true);
+          close(true);
+          pick(item.getAttribute(attr));
         });
         menu.addEventListener("keydown", (e) => {
           const list = items();
@@ -1624,20 +1685,41 @@
             list[e.key === "Home" ? 0 : list.length - 1].focus();
           } else if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            if (at >= 0) { setTheme(list[at].dataset.themeValue); closeThemeMenu(true); }
+            if (at >= 0) { close(true); pick(list[at].getAttribute(attr)); }
           } else if (e.key === "Escape") {
             e.preventDefault();
-            closeThemeMenu(true);
+            close(true);
           } else if (e.key === "Tab") {
-            closeThemeMenu(false);
+            close(false);
           }
         });
         document.addEventListener("pointerdown", (e) => {
-          if (!e.target.closest(".theme")) closeThemeMenu(false);
+          if (!menu.parentElement.contains(e.target)) close(false);
         });
-        paintTheme();
-      })();
+      }
+      prefersDark.addEventListener("change", paintTheme);
+      menuSwitch("themeButton", "themeMenu", "data-theme-value", setTheme);
+      paintTheme();
 
+      // ---- language switch ------------------------------------------------
+      // The choice lives under localStorage 'language' (ru | en | system) like the apps'; the
+      // boot script in <head> resolved it. A new choice reloads the page, so the static
+      // markup, every rendered line and the server's texts all change together.
+      for (const item of document.querySelectorAll("[data-lang-value]"))
+        item.setAttribute("aria-checked", String(item.dataset.langValue === (document.documentElement.dataset.languageChoice || "system")));
+      menuSwitch("langButton", "langMenu", "data-lang-value", (choice) => {
+        try {
+          localStorage.setItem("language", choice);
+        } catch {
+          // Storage unavailable: the cookie carries the choice, and the boot script reads it.
+          const tags = choice === "system" ? navigator.languages || [navigator.language] : [choice];
+          const lang = tags.map((x) => String(x || "").toLowerCase().split(/[-_]/)[0]).find((b) => b === "ru" || b === "en") || "ru";
+          document.cookie = "buff_lang=" + lang + "; path=/; SameSite=Strict";
+        }
+        location.reload();
+      });
+
+      translatePage();
       $("navHost").textContent = location.host;
       show(current());
       load();
