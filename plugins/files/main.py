@@ -264,16 +264,18 @@ def check():
             notes.append(say(f"{root}: нет такого пути", f"{root}: no such path"))
         except Exception as exc:  # a share that will not answer names itself
             notes.append(f"{root}: {exc}")
-    servers = sorted({r.server for r in AREA.roots if r.kind == "smb"})
-    if servers:
-        account = plugin.credential("share").get("username") or say("(без учётной записи)", "(no account)")
-        notes.append(say(f"сетевые папки {', '.join(servers)} — учётная запись {account}",
-                         f"network folders {', '.join(servers)} — account {account}"))
     detail = visible(seen, len(AREA.roots), one="указанную папку", many="указанные папки",
                      many_of="указанных папок", fix="Проверьте путь и права на чтение.",
                      en=dict(one="the listed folder", many="listed folders", fix="Check the path and the read permissions."))
     if notes:
         detail += " " + "; ".join(notes) + "."
+    # The shares and the account are a sentence of their own: after a path's note they would
+    # read as its tail, and after «The bot sees …» they started in lower case (#589).
+    servers = sorted({r.server for r in AREA.roots if r.kind == "smb"})
+    if servers:
+        account = plugin.credential("share").get("username") or say("(без учётной записи)", "(no account)")
+        detail += " " + say(f"Сетевые папки {', '.join(servers)} — учётная запись {account}.",
+                            f"Network folders {', '.join(servers)} — account {account}.")
     return {"ok": seen == len(AREA.roots), "detail": detail}
 
 

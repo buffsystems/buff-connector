@@ -167,6 +167,20 @@ class ToolTests(unittest.TestCase):
             res = self.main.check()
         self.assertEqual(res["detail"], "The bot sees the listed folder.")
 
+    def test_check_names_the_network_folders_in_a_sentence_of_its_own(self):
+        # The share's note followed «The bot sees …» as «. network folders …»: a sentence
+        # starting in lower case, in both languages (#589).
+        area = self.main.area.Area([self.docs, r"\\files.corp.local\docs\2026"], [])
+        share = {"username": "svc-buff", "password": "x"}
+        with mock.patch.object(self.main, "AREA", area), \
+                mock.patch.object(self.main, "store_for", lambda root: self.main.LOCAL), \
+                mock.patch.object(self.main.plugin, "credential", lambda name: share):
+            ru = self.main.check()["detail"]
+            with mock.patch.dict(os.environ, {"BUFF_LANG": "en"}):
+                en = self.main.check()["detail"]
+        self.assertTrue(ru.endswith("Сетевые папки files.corp.local — учётная запись svc-buff."), ru)
+        self.assertTrue(en.endswith("Network folders files.corp.local — account svc-buff."), en)
+
     def test_tool_descriptions_name_the_roots(self):
         # In the language of the listing, whichever the model reads (#565).
         for lang, words in (("ru", "Область подключения: "), ("en", "The connection's area: ")):
