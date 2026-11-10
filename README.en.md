@@ -61,6 +61,7 @@ The same connector serves every Buff edition — **Community, Enterprise on-prem
 | **Knowledge sources** | Confluence, Notion, Google Drive, Figma, folders and network shares (SMB), the web. |
 | **Your own MCP servers** | An archive, a GitHub repository or a remote server — with your explicit consent and marked «custom». |
 | **Integration catalogue** | Signed bundles: before installing you see where an integration may connect, which credentials it asks for and which tools it gives the model. |
+| **Models for Buff Code** | An OpenAI-compatible door, `/v1/models` and `/v1/chat/completions`: the organisation's model under a stable id, its name, window (`context_length`), output ceiling (`max_output_tokens`), reasoning flag (`supports_reasoning`) and the organisation's defaults for Buff Code (`buff_defaults`: level and window). A request that names no level gets the organisation's. |
 | **Isolation** | Every connection is a separate process under a separate OS user; neighbours cannot see each other, secrets are read by the core only. |
 
 <p align="center">

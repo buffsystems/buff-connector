@@ -110,6 +110,11 @@ func listModels(w http.ResponseWriter, r *http.Request, link Requester, token, o
 	names, _ := reply["names"].(map[string]any)
 	// What each model reads and writes (#27), as OpenRouter spells it in its own list.
 	modalities, _ := reply["modalities"].(map[string]any)
+	// AI modes (#838): the model's window, output ceiling and reasoning flag, and the
+	// organisation's defaults for Buff Code — Buff Code sizes its context and offers its
+	// thinking levels by them.
+	limits, _ := reply["limits"].(map[string]any)
+	defaults, hasDefaults := reply["defaults"].(map[string]any)
 	data := []map[string]any{}
 	if list, ok := reply["models"].([]any); ok {
 		for _, m := range list {
@@ -121,6 +126,20 @@ func listModels(w http.ResponseWriter, r *http.Request, link Requester, token, o
 				if m, ok := modalities[id].(map[string]any); ok {
 					model["input_modalities"] = m["input"]
 					model["output_modalities"] = m["output"]
+				}
+				if l, ok := limits[id].(map[string]any); ok {
+					if v, ok := l["context"].(float64); ok {
+						model["context_length"] = v
+					}
+					if v, ok := l["max_output"].(float64); ok {
+						model["max_output_tokens"] = v
+					}
+					if v, ok := l["reasoning"].(bool); ok {
+						model["supports_reasoning"] = v
+					}
+				}
+				if hasDefaults {
+					model["buff_defaults"] = defaults
 				}
 				data = append(data, model)
 			}

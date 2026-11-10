@@ -27,13 +27,12 @@ import (
 // catalogBase is where the plugin catalogue is published. Baked into the build
 // like the relay address, so an operator never copies it by hand.
 //
-// It is a container REGISTRY rather than a host of our own. A customer with a
-// closed perimeter already knows what to do with one — mirror it into their own
-// Harbor or Nexus, allow it, scan it — and pointing this at that mirror is then
-// the only change they make. It also means one less public host for us to run.
-// The registry is transport: the catalogue and every bundle carry our signature,
-// checked here against the keys baked into this build.
-var catalogBase = "oci://registry.buff.systems/buff/plugins"
+// It is the site's downloads (#619): the release publishes the signed catalogue
+// there, and the catalogue also names the newest connector (#768). A closed
+// perimeter mirrors it and points BUFF_CATALOG_URL (or CATALOG= at build time)
+// at the mirror. The site is transport: the catalogue and every bundle carry our
+// signature, checked here against the keys baked into this build.
+var catalogBase = "https://buff.systems/downloads/plugins"
 
 const defaultAdminAddr = "127.0.0.1:8765"
 

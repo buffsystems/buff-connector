@@ -208,3 +208,35 @@ func TestASilentModelKeepsTheClientConnected(t *testing.T) {
 		t.Fatalf("no keep-alive in %q", w.body())
 	}
 }
+
+// AI modes (#838): the model's window, output ceiling and reasoning flag, and the organisation's
+// defaults for Buff Code, ride through as the backend said them; a model the backend said
+// nothing about carries nothing.
+func TestModelsCarryLimitsAndTheOrganisationsDefaults(t *testing.T) {
+	l := &streamLink{fakeLink: fakeLink{reply: map[string]any{"ok": true, "models": []any{"buff", "other"},
+		"limits":   map[string]any{"buff": map[string]any{"context": float64(400000), "max_output": float64(32000), "reasoning": true}},
+		"defaults": map[string]any{"thinking": "high", "context_tokens": float64(200000)}}}}
+	w := call(Handler(l), http.MethodGet, "/v1/models", "", dev)
+	var got struct {
+		Data []map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(w.Body.Bytes(), &got)
+	if len(got.Data) != 2 {
+		t.Fatalf("%s", w.Body)
+	}
+	buff := got.Data[0]
+	if buff["context_length"] != float64(400000) || buff["max_output_tokens"] != float64(32000) || buff["supports_reasoning"] != true {
+		t.Fatalf("limits lost: %s", w.Body)
+	}
+	defaults, _ := buff["buff_defaults"].(map[string]any)
+	if defaults["thinking"] != "high" || defaults["context_tokens"] != float64(200000) {
+		t.Fatalf("defaults lost: %s", w.Body)
+	}
+	other := got.Data[1]
+	if _, said := other["context_length"]; said {
+		t.Fatalf("an unknown model got a window: %s", w.Body)
+	}
+	if _, said := other["buff_defaults"]; !said {
+		t.Fatalf("the organisation's defaults are the same for every model: %s", w.Body)
+	}
+}
