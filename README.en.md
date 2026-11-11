@@ -42,7 +42,7 @@ The same connector serves every Buff edition — **Community, Enterprise on-prem
 | **Nothing opens inwards** | Outbound connections only: nothing connects into your network, tracker events are polled — no inbound port needed (a few webhooks are the exception, [see the docs](https://buff.systems/en/docs/connector/trackers)). |
 | **Your integrations without handing over intellectual property** | Internal systems are plugged in with your own MCP server or an SDK plugin. The code runs on the connector's machine and goes nowhere — the model sees tool descriptions and call results only. |
 | **Git servers behind a firewall** | The git bridge carries repositories that the internet cannot reach, and brings pull requests back — without exposing your git. |
-| **Buff Code through the company** | The developer gateway: engineers' [Buff Code](https://github.com/buffsystems/buff-code) works with the organisation's models, knowledge and connections through the connector — no provider keys on developer machines. |
+| **Buff Code through the company** | The developer gateway: engineers' [Buff Code](https://github.com/buffsystems/buff-code) works with the organisation's models, knowledge and connections through the connector — no provider keys on developer machines. The sessions are reachable from a phone too — in the [Buff app](https://github.com/buffsystems/buff-mobile). |
 
 ## Editions
 
